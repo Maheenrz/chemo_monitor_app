@@ -3,8 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add this
 import 'shared/login_screen.dart';       // Look in shared folder
 import 'patient/patient_home_screen.dart'; 
-import 'doctor/doctor_home_screen.dart';
-
+import 'package:chemo_monitor_app/screens/doctor/doctor_home_screen.dart';
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});

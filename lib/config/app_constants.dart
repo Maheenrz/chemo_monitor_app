@@ -7,38 +7,45 @@ class AppInfo {
   static const String description = 'AI-Integrated Chemotherapy Patient Monitoring';
 }
 
-// Color Palette
+// Color Palette - Blue & Lavender Theme
 class AppColors {
-  // Primary Colors
-  static const Color primary = Color(0xFF2196F3);
-  static const Color primaryDark = Color(0xFF1976D2);
-  static const Color primaryLight = Color(0xFF64B5F6);
+  // Primary Colors - Blue Theme
+  static const Color primary = Color(0xFF4A90E2); // Soft Blue
+  static const Color primaryDark = Color(0xFF2E5C8A);
+  static const Color primaryLight = Color(0xFF7BB3FF);
   
-  // Accent Colors
-  static const Color accent = Color(0xFF00BCD4);
+  // Accent Colors - Lavender Theme
+  static const Color accent = Color(0xFFB8A4E0); // Lavender
+  static const Color accentLight = Color(0xFFE6DEFF);
+  static const Color accentDark = Color(0xFF8B7BB8);
   
   // Status Colors
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFFC107);
-  static const Color danger = Color(0xFFF44336);
-  static const Color info = Color(0xFF2196F3);
+  static const Color success = Color(0xFF66BB6A); // Soft Green
+  static const Color warning = Color(0xFFFFA726); // Soft Orange
+  static const Color danger = Color.fromARGB(255, 244, 103, 100); // Soft Red
+  static const Color info = Color(0xFF4A90E2); // Blue
   
-  // Severity Colors
-  static const Color severityLow = Color(0xFF4CAF50);
-  static const Color severityMedium = Color(0xFFFFC107);
-  static const Color severityHigh = Color(0xFFF44336);
+  // Severity Colors (matching risk levels)
+  static const Color severityLow = Color(0xFF66BB6A);
+  static const Color severityMedium = Color(0xFFFFA726);
+  static const Color severityHigh = Color(0xFFEF5350);
   
   // Text Colors
-  static const Color textPrimary = Color(0xFF212121);
-  static const Color textSecondary = Color(0xFF757575);
-  static const Color textHint = Color(0xFF9E9E9E);
+  static const Color textPrimary = Color(0xFF2C3E50);
+  static const Color textSecondary = Color(0xFF7F8C8D);
+  static const Color textHint = Color(0xFFBDC3C7);
   
   // Background Colors
-  static const Color background = Color(0xFFFAFAFA);
+  static const Color background = Color(0xFFF8F9FE); // Very light blue-ish
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color divider = Color(0xFFBDBDBD);
+  static const Color cardBackground = Color(0xFFF3F4FF); // Light lavender tint
+  static const Color divider = Color(0xFFE8EAF6);
+  
+  // Chat Colors
+  static const Color chatBubbleMe = Color(0xFF4A90E2); // Blue for user
+  static const Color chatBubbleOther = Color(0xFFE6DEFF); // Light lavender for others
+  static const Color chatBotBubble = Color(0xFFB8A4E0); // Lavender for AI
 }
-
 // Text Styles
 class AppTextStyles {
   static const TextStyle heading1 = TextStyle(

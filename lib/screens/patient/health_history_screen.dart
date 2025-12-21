@@ -4,6 +4,7 @@ import 'package:chemo_monitor_app/config/app_constants.dart';
 import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:chemo_monitor_app/services/health_data_service.dart';
 import 'package:intl/intl.dart';
+import 'package:chemo_monitor_app/widgets/common/ml_confidence_widget.dart';
 
 class HealthHistoryScreen extends StatelessWidget {
   const HealthHistoryScreen({super.key});
@@ -170,32 +171,12 @@ class _HealthDataCard extends StatelessWidget {
               ],
             ),
 
-            // ML Probabilities (if available)
+            // ✅ CHANGED: Use the new MLConfidenceWidget
             if (data.mlOutputProbabilities != null) ...[
-              Divider(height: 20),
-              Text('AI Confidence:', style: AppTextStyles.bodySmall.copyWith(
-                fontWeight: FontWeight.bold,
-              )),
-              SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _ProbabilityBadge(
-                    label: 'Low',
-                    probability: data.mlOutputProbabilities![0],
-                    color: AppColors.success,
-                  ),
-                  _ProbabilityBadge(
-                    label: 'Moderate',
-                    probability: data.mlOutputProbabilities![1],
-                    color: AppColors.warning,
-                  ),
-                  _ProbabilityBadge(
-                    label: 'High',
-                    probability: data.mlOutputProbabilities![2],
-                    color: AppColors.danger,
-                  ),
-                ],
+              SizedBox(height: 12),
+              MLConfidenceWidget(
+                probabilities: data.mlOutputProbabilities!,
+                predictedRiskLevel: data.riskLevel ?? 0,
               ),
             ],
 
@@ -244,35 +225,6 @@ class _VitalItem extends StatelessWidget {
               fontWeight: FontWeight.bold,
             )),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ProbabilityBadge extends StatelessWidget {
-  final String label;
-  final double probability;
-  final Color color;
-
-  const _ProbabilityBadge({
-    required this.label,
-    required this.probability,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label, style: AppTextStyles.bodySmall),
-        SizedBox(height: 4),
-        Text(
-          '${(probability * 100).toStringAsFixed(1)}%',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
         ),
       ],
     );
