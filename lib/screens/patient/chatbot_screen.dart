@@ -6,6 +6,8 @@ import 'package:chemo_monitor_app/services/health_data_service.dart';
 import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:intl/intl.dart';
 import 'package:chemo_monitor_app/widgets/common/markdown_text_widget.dart';
+import 'package:chemo_monitor_app/widgets/common/glass_card.dart';
+import 'package:chemo_monitor_app/widgets/common/glass_button.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -58,11 +60,56 @@ How can I assist you today?''',
     });
   }
 
+  void _showHealthSummary() {
+    if (_latestHealthData == null) {
+      _addSystemMessage('No recent health data available. Please check back after your next reading.');
+      return;
+    }
+    
+    final data = _latestHealthData!;
+    final riskLevel = data.getRiskLevelString();
+    final timestamp = DateFormat('MMM dd, hh:mm a').format(data.timestamp);
+    
+    final summary = '''
+📊 **Latest Health Summary** ($timestamp)
+
+**Risk Level:** ${riskLevel.toUpperCase()}
+**Heart Rate:** ${data.heartRate} bpm
+**SpO₂ Level:** ${data.spo2Level}%
+**Temperature:** ${data.temperature.toStringAsFixed(1)}°C
+**Blood Pressure:** ${data.systolicBP}/${data.diastolicBP} mmHg
+
+${_getRiskAdvice(data.riskLevel)}
+''';
+    
+    _addSystemMessage(summary);
+  }
+
+  String _getRiskAdvice(int? riskLevel) {
+    switch (riskLevel) {
+      case 0:
+        return '✅ You are in the normal range. Continue with your regular monitoring schedule.';
+      case 1:
+        return '⚠️ Moderate risk detected. Please rest and monitor your symptoms. Contact your doctor if symptoms persist.';
+      case 2:
+        return '🚨 High risk detected. Please seek immediate medical attention.';
+      default:
+        return '📋 Please consult with your healthcare provider for personalized advice.';
+    }
+  }
+
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
     final userMessage = _messageController.text.trim();
     _messageController.clear();
+
+    // Check for quick actions
+    if (userMessage.toLowerCase().contains('summary') || 
+        userMessage.toLowerCase().contains('vitals')) {
+      _showHealthSummary();
+      return;
+    }
 
     setState(() {
       _messages.add(ChatMessage(
@@ -106,12 +153,23 @@ How can I assist you today?''',
     }
   }
 
+  void _addSystemMessage(String text) {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: text,
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
+    _scrollToBottom();
+  }
+
   void _scrollToBottom() {
-    Future.delayed(Duration(milliseconds: 100), () {
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -121,46 +179,119 @@ How can I assist you today?''',
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background, // Ensure background color is set
+      backgroundColor: AppColors.mainBackground,
       appBar: AppBar(
         title: Row(
           children: [
-            Icon(Icons.smart_toy),
-            SizedBox(width: 8),
-            Text('AI Health Assistant'),
+            GlassCard(
+              padding: const EdgeInsets.all(4),
+              blurSigma: 5,
+              child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'AI Health Assistant',
+              style: AppTextStyles.heading3.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
           ],
         ),
-        backgroundColor: const Color.fromARGB(255, 215, 123, 231),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primaryBlue),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: Column(
         children: [
-          // Warning Banner
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.orange[50],
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 20, color: Colors.orange[900]),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'This is an AI assistant. Always consult your doctor for medical decisions.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromARGB(255, 255, 123, 51), 
-                      fontSize: 12
+          // Warning Banner (Glassmorphism style)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: GlassCard(
+              padding: const EdgeInsets.all(16),
+              color: Colors.orange.withOpacity(0.1),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 20, color: Colors.orange),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'AI assistant for guidance only. Always consult your doctor for medical decisions.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.orange.shade800,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+
+          // Quick Action Buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  GlassButton(
+                    onPressed: _showHealthSummary,
+                    child: const Row(
+                      children: [
+                        Icon(Icons.health_and_safety_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Health Summary'),
+                      ],
+                    ),
+                    type: ButtonType.secondary,
+                    height: 36,
+                  ),
+                  const SizedBox(width: 8),
+                  GlassButton(
+                    onPressed: () {
+                      _messageController.text = 'What should I do about side effects?';
+                      _sendMessage();
+                    },
+                    child: const Row(
+                      children: [
+                        Icon(Icons.medical_services_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Side Effects'),
+                      ],
+                    ),
+                    type: ButtonType.secondary,
+                    height: 36,
+                  ),
+                  const SizedBox(width: 8),
+                  GlassButton(
+                    onPressed: () {
+                      _messageController.text = 'When should I contact my doctor?';
+                      _sendMessage();
+                    },
+                    child: const Row(
+                      children: [
+                        Icon(Icons.contact_support_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('When to Call'),
+                      ],
+                    ),
+                    type: ButtonType.secondary,
+                    height: 36,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
 
           // Messages List
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 return _ChatBubble(message: _messages[index]);
@@ -171,20 +302,20 @@ How can I assist you today?''',
           // Typing Indicator
           if (_isLoading)
             Padding(
-              padding: EdgeInsets.only(left: 20, bottom: 10),
+              padding: const EdgeInsets.only(left: 16, bottom: 10),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.purple[100],
-                    child: Icon(Icons.smart_toy, color: Colors.purple, size: 18),
+                  GlassCard(
+                    padding: const EdgeInsets.all(6),
+                    blurSigma: 5,
+                    child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 20),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Text(
-                    'AI is typing...',
+                    'AI is thinking...',
                     style: AppTextStyles.bodySmall.copyWith(
                       fontStyle: FontStyle.italic,
-                      color: Colors.grey[600],
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -193,14 +324,14 @@ How can I assist you today?''',
 
           // Message Input Area
           Container(
-            padding: EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: Offset(0, -5),
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -208,34 +339,31 @@ How can I assist you today?''',
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(24),
-                      ),
+                    child: GlassCard(
+                      padding: EdgeInsets.zero,
                       child: TextField(
                         controller: _messageController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'Ask about your health...',
-                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          hintStyle: TextStyle(color: AppColors.textSecondary),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
                         ),
                         maxLines: null,
                         textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                   ),
-                  SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 235, 150, 250),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                      onPressed: _isLoading ? null : _sendMessage,
-                    ),
+                  const SizedBox(width: 12),
+                  GlassButton(
+                    onPressed: _isLoading ? null : _sendMessage,
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                    type: ButtonType.primary,
+                    height: 48,
                   ),
                 ],
               ),
@@ -273,78 +401,74 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate width limit (75% of screen width)
     final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.75;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // AI Icon (Left Side)
           if (!message.isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.purple[100],
-              child: Icon(Icons.smart_toy, color: const Color.fromARGB(255, 209, 131, 222), size: 18),
+            GlassCard(
+              padding: const EdgeInsets.all(6),
+              blurSigma: 5,
+              child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 20),
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
           ],
 
           // Chat Bubble
           Flexible(
             child: Container(
               constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: message.isUser ? Colors.purple : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                  bottomLeft: message.isUser ? Radius.circular(20) : Radius.circular(4),
-                  bottomRight: message.isUser ? Radius.circular(4) : Radius.circular(20),
-                ),
-                boxShadow: [
-                  if (!message.isUser)
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                      offset: Offset(0, 2),
-                    ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!message.isUser)
-                    MarkdownTextWidget(
-                      text: message.text,
-                      textColor: AppColors.textPrimary,
-                    )
-                  else
-                    Text(
-                      message.text,
-                      style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
-                    ),
-                  
-                  SizedBox(height: 4),
-                  
-                  // Timestamp
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Text(
-                      DateFormat('hh:mm a').format(message.timestamp),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: message.isUser ? Colors.white70 : Colors.grey[400],
+              child: GlassCard(
+                padding: const EdgeInsets.all(16),
+                margin: message.isUser ? const EdgeInsets.only(left: 40) : const EdgeInsets.only(right: 40),
+                color: message.isUser ? AppColors.primaryBlue.withOpacity(0.8) : Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!message.isUser)
+                      MarkdownTextWidget(
+                        text: message.text,
+                        textColor: AppColors.textPrimary,
+                      )
+                    else
+                      Text(
+                        message.text,
+                        style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+                      ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    // Timestamp
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: Text(
+                        DateFormat('hh:mm a').format(message.timestamp),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: message.isUser ? Colors.white70 : AppColors.textSecondary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
+
+          // User Icon (Right Side)
+          if (message.isUser) ...[
+            const SizedBox(width: 8),
+            GlassCard(
+              padding: const EdgeInsets.all(6),
+              blurSigma: 5,
+              child: Icon(Icons.person_rounded, color: AppColors.softPurple, size: 20),
+            ),
+          ],
         ],
       ),
     );

@@ -34,15 +34,12 @@ class MLPredictionService {
   /// Output: [prob_low, prob_moderate, prob_high]
   /// Returns: {riskLevel: 0/1/2, probabilities: [0.x, 0.y, 0.z]}
   Future<Map<String, dynamic>> predict(List<double> inputData) async {
-    if (!_isModelLoaded || _interpreter == null) {
-      throw Exception('Model not loaded. Call loadModel() first.');
-    }
+  if (!_isModelLoaded || _interpreter == null) {
+    print('⚠️ Model not loaded, using rule-based fallback');
+    return _fallbackPrediction(inputData);
+  }
 
-    if (inputData.length != 5) {
-      throw Exception('Input must have exactly 5 values: [HR, SpO2, SysBP, DiaBP, Temp]');
-    }
-
-    try {
+  try {
       print('🔮 Running ML prediction...');
       print('📥 Input: $inputData');
 
@@ -74,10 +71,35 @@ class MLPredictionService {
         'confidence': probabilities[riskLevel], // Confidence of prediction
       };
     } catch (e) {
-      print('❌ Prediction error: $e');
-      rethrow;
-    }
+    print('❌ ML prediction failed: $e');
+    return _fallbackPrediction(inputData);
   }
+}
+
+Map<String, dynamic> _fallbackPrediction(List<double> inputData) {
+  // Simple rule-based fallback
+  double heartRate = inputData[0];
+  double spo2 = inputData[1];
+  double systolicBP = inputData[2];
+  double temperature = inputData[4];
+  
+  int riskLevel;
+  
+  if (temperature > 38.5 || spo2 < 92 || heartRate > 120 || systolicBP > 160) {
+    riskLevel = 2; // High risk
+  } else if (temperature > 37.8 || spo2 < 95 || heartRate > 100 || systolicBP > 140) {
+    riskLevel = 1; // Moderate risk
+  } else {
+    riskLevel = 0; // Low risk
+  }
+  
+  return {
+    'riskLevel': riskLevel,
+    'probabilities': riskLevel == 2 ? [0.1, 0.2, 0.7] : 
+                    riskLevel == 1 ? [0.3, 0.5, 0.2] : 
+                    [0.8, 0.15, 0.05],
+  };
+}
 
   /// Get index of maximum value (argmax)
   int _getMaxIndex(List<double> probabilities) {

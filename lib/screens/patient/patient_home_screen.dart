@@ -1,3 +1,4 @@
+// lib/screens/patient/patient_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
@@ -7,30 +8,32 @@ import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:chemo_monitor_app/models/user_model.dart';
 import 'package:chemo_monitor_app/screens/patient/vitals_entry_screen.dart';
 import 'package:chemo_monitor_app/screens/patient/health_history_screen.dart';
-import 'package:chemo_monitor_app/screens/shared/chat_screen.dart'; 
 import 'package:chemo_monitor_app/screens/patient/chatbot_screen.dart';
+import 'package:chemo_monitor_app/screens/shared/message_screen.dart';
+import 'package:chemo_monitor_app/screens/shared/settings_screen.dart';
 import 'package:intl/intl.dart';
 
-// Soft Color Palette
-class SoftColors {
-  static const Color primaryBlue = Color(0xFF7BA3D6);      // Soft blue
-  static const Color lightBlue = Color(0xFFE8F1FC);        // Very light blue background
-  static const Color softGreen = Color(0xFF6FD195);        // Soft green
-  static const Color paleGreen = Color(0xFFE8F8F0);        // Pale green background
-  static const Color softPurple = Color(0xFF9B8ED4);       // Soft purple
-  static const Color palePurple = Color(0xFFF2F0FC);       // Pale purple background
-  
-  // Soft Risk Colors
-  static const Color riskLow = Color(0xFF6FD195);          // Soft green
-  static const Color riskLowBg = Color(0xFFE8F8F0);        // Pale green
-  static const Color riskModerate = Color(0xFFFAB87F);     // Soft orange/peach
-  static const Color riskModerateBg = Color(0xFFFFF4EC);   // Pale orange
-  static const Color riskHigh = Color(0xFFF08B9C);         // Soft pink/coral
-  static const Color riskHighBg = Color(0xFFFFEEF1);       // Pale pink
-  
+// Soft Pastel Color Palette for Chemo Care
+class ChemoColors {
+  static const Color wisteriaBlue =
+      Color(0xFF809bce); // Primary soft blue-violet
+  static const Color powderBlue = Color(0xFF95b8d1); // Comforting blue
+  static const Color frozenWater = Color(0xFFb8e0d2); // Turquoise shimmer
+  static const Color honeydew = Color(0xFFd6eadf); // Pale green
+  static const Color pastelPetal = Color(0xFFeac4d5); // Blush pink
+
+  // Background shades
+  static const Color lightBackground = Color(0xFFF5F7FA);
+  static const Color cardBackground = Colors.white;
+
+  // Text colors
   static const Color textPrimary = Color(0xFF2D3E50);
   static const Color textSecondary = Color(0xFF8E9AAF);
-  static const Color cardBackground = Colors.white;
+
+  // Risk levels (softer versions)
+  static const Color riskLow = Color(0xFFb8e0d2); // Frozen Water
+  static const Color riskModerate = Color(0xFFeac4d5); // Pastel Petal
+  static const Color riskHigh = Color(0xFFf4b4c4); // Slightly deeper petal
 }
 
 class PatientHomeScreen extends StatefulWidget {
@@ -43,755 +46,809 @@ class PatientHomeScreen extends StatefulWidget {
 class _PatientHomeScreenState extends State<PatientHomeScreen> {
   final AuthService _authService = AuthService();
   final HealthDataService _healthDataService = HealthDataService();
-  
+
   UserModel? _userProfile;
+  HealthDataModel? _latestHealthData;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserProfile();
+    _loadData();
   }
 
-  Future<void> _loadUserProfile() async {
+  Future<void> _loadData() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    if (user == null) return;
+
+    try {
       final profile = await _authService.getUserProfile(user.uid);
+      final latestData = await _healthDataService.getLatestHealthData(user.uid);
+
       if (mounted) {
         setState(() {
           _userProfile = profile;
+          _latestHealthData = latestData;
+          _isLoading = false;
         });
+      }
+    } catch (e) {
+      print('Error loading patient data: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  Future<void> _logout() async {
-    await _authService.signOut();
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/login');
+  String _getRiskLevelText() {
+    if (_latestHealthData == null) return 'Not Recorded';
+    switch (_latestHealthData!.riskLevel) {
+      case 0:
+        return 'Stable';
+      case 1:
+        return 'Monitor';
+      case 2:
+        return 'Attention';
+      default:
+        return 'Unknown';
     }
   }
 
-  void _navigateToProfileEdit() {
-    // TODO: Navigate to profile edit screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Profile edit coming soon!'),
-        backgroundColor: SoftColors.softPurple,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+  Color _getRiskColor() {
+    if (_latestHealthData == null) return ChemoColors.frozenWater;
+    switch (_latestHealthData!.riskLevel) {
+      case 0:
+        return ChemoColors.riskLow;
+      case 1:
+        return ChemoColors.riskModerate;
+      case 2:
+        return ChemoColors.riskHigh;
+      default:
+        return ChemoColors.textSecondary;
+    }
   }
 
   void _navigateToVitalsEntry() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => VitalsEntryScreen()),
+      MaterialPageRoute(builder: (context) => const VitalsEntryScreen()),
     );
 
     if (result == true) {
-      setState(() {});
+      await _loadData();
     }
   }
 
+  void _navigateToChatWithDoctor() async {
+    if (_userProfile?.assignedDoctorId != null) {
+      final doctorProfile = await _authService.getUserProfile(
+        _userProfile!.assignedDoctorId!,
+      );
+
+      if (doctorProfile != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MessageScreen(
+              otherUserId: doctorProfile.uid,
+              otherUserName: doctorProfile.name,
+              otherUserRole: 'doctor',
+            ),
+          ),
+        );
+      } else {
+        _showSnackBar('Doctor profile not found');
+      }
+    } else {
+      _showSnackBar('No assigned doctor found');
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ChemoColors.wisteriaBlue,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
-      backgroundColor: SoftColors.lightBlue,
-      appBar: AppBar(
-        elevation: 0,
-        title: Text(
-          'Health Monitor',
-          style: TextStyle(
-            color: SoftColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        iconTheme: IconThemeData(color: SoftColors.textPrimary),
-        actions: [
-          IconButton(
-            icon: Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: SoftColors.lightBlue,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.edit_outlined, size: 20, color: SoftColors.primaryBlue),
-            ),
-            onPressed: _navigateToProfileEdit,
-            tooltip: 'Edit Profile',
-          ),
-          IconButton(
-            icon: Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: SoftColors.lightBlue,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.logout, size: 20, color: SoftColors.primaryBlue),
-            ),
-            onPressed: _logout,
-          ),
-          SizedBox(width: 12),
-        ],
-      ),
-      body: user == null
-          ? Center(child: Text('Not logged in'))
-          : RefreshIndicator(
-              onRefresh: () async {
-                await _loadUserProfile();
-                setState(() {});
-              },
-              color: SoftColors.primaryBlue,
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Welcome Header Card
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(32),
-                          bottomRight: Radius.circular(32),
+      backgroundColor: ChemoColors.lightBackground,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          color: ChemoColors.wisteriaBlue,
+          child: _isLoading
+              ? Center(
+                  child: CircularProgressIndicator(
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(ChemoColors.wisteriaBlue),
+                  ),
+                )
+              : CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    // Header
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                        child: _buildHeader(),
+                      ),
+                    ),
+
+                    // Hero Card (Chemo Journey Card)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: _buildHeroCard(),
+                      ),
+                    ),
+
+                    // Vitals Summary
+                    if (_latestHealthData != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                          child: _buildVitalsSummaryRow(),
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [SoftColors.primaryBlue, SoftColors.softPurple],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: SoftColors.primaryBlue.withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: _userProfile?.profileImageUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.network(
-                                    _userProfile!.profileImageUrl!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Center(
-                                  child: Text(
-                                    _userProfile?.name.isNotEmpty == true 
-                                      ? _userProfile!.name[0].toUpperCase() 
-                                      : 'P',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Hello,',
-                                  style: TextStyle(
-                                    color: SoftColors.textSecondary,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  _userProfile?.name ?? 'Patient',
-                                  style: TextStyle(
-                                    color: SoftColors.textPrimary,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (_userProfile?.age != null || _userProfile?.bloodGroup != null)
-                                  Padding(
-                                    padding: EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '${_userProfile?.age != null ? "${_userProfile!.age} yrs" : ""}'
-                                      '${_userProfile?.age != null && _userProfile?.bloodGroup != null ? " • " : ""}'
-                                      '${_userProfile?.bloodGroup != null ? "${_userProfile!.bloodGroup}" : ""}',
-                                      style: TextStyle(
-                                        color: SoftColors.textSecondary,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
 
-                    SizedBox(height: 20),
-
-                    // Latest Health Status
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        'Your Health Status',
-                        style: TextStyle(
-                          color: SoftColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                    // Doctor Contact Card
+                    if (_userProfile?.assignedDoctorId != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                          child: _buildDoctorCard(),
                         ),
                       ),
-                    ),
-
-                    SizedBox(height: 12),
-
-                    FutureBuilder<HealthDataModel?>(
-                      future: _healthDataService.getLatestHealthData(user.uid),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40),
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(SoftColors.primaryBlue),
-                              ),
-                            ),
-                          );
-                        }
-
-                        final latestData = snapshot.data;
-
-                        if (latestData == null) {
-                          return Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20),
-                            child: Container(
-                              padding: EdgeInsets.all(32),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Column(
-                                children: [
-                                  // Illustration placeholder
-                                  Container(
-                                    width: 200,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: SoftColors.palePurple,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Icon(
-                                      Icons.add_chart_rounded,
-                                      size: 80,
-                                      color: SoftColors.softPurple,
-                                    ),
-                                  ),
-                                  SizedBox(height: 24),
-                                  Text(
-                                    'No health data yet',
-                                    style: TextStyle(
-                                      color: SoftColors.textPrimary,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Start tracking your health by entering your vitals',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: SoftColors.textSecondary,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Determine risk colors
-                        Color riskColor = SoftColors.riskLow;
-                        Color riskBgColor = SoftColors.riskLowBg;
-                        String riskText = 'Low Risk';
-                        
-                        if (latestData.riskLevel == 1) {
-                          riskColor = SoftColors.riskModerate;
-                          riskBgColor = SoftColors.riskModerateBg;
-                          riskText = 'Moderate Risk';
-                        } else if (latestData.riskLevel == 2) {
-                          riskColor = SoftColors.riskHigh;
-                          riskBgColor = SoftColors.riskHighBg;
-                          riskText = 'High Risk';
-                        }
-
-                        return Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Column(
-                              children: [
-                                // Header with date and risk badge
-                                Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Latest Reading',
-                                            style: TextStyle(
-                                              color: SoftColors.textSecondary,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Text(
-                                            DateFormat('MMM dd, hh:mm a').format(latestData.timestamp),
-                                            style: TextStyle(
-                                              color: SoftColors.textPrimary,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: riskBgColor,
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          riskText.toUpperCase(),
-                                          style: TextStyle(
-                                            color: riskColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Illustration/Visual Element
-                                Container(
-                                  margin: EdgeInsets.symmetric(horizontal: 20),
-                                  padding: EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color: SoftColors.lightBlue,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                    children: [
-                                      _VitalIndicator(
-                                        icon: Icons.favorite_rounded,
-                                        label: 'Heart Rate',
-                                        value: '${latestData.heartRate}',
-                                        unit: 'bpm',
-                                        color: SoftColors.riskHigh,
-                                        bgColor: SoftColors.riskHighBg,
-                                      ),
-                                      _VitalIndicator(
-                                        icon: Icons.air_rounded,
-                                        label: 'SpO2',
-                                        value: '${latestData.spo2Level}',
-                                        unit: '%',
-                                        color: SoftColors.primaryBlue,
-                                        bgColor: SoftColors.lightBlue,
-                                      ),
-                                      _VitalIndicator(
-                                        icon: Icons.thermostat_rounded,
-                                        label: 'Temp',
-                                        value: '${latestData.temperature}',
-                                        unit: '°F',
-                                        color: SoftColors.riskModerate,
-                                        bgColor: SoftColors.riskModerateBg,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // AI Confidence Section
-                                if (latestData.mlOutputProbabilities != null)
-                                  Padding(
-                                    padding: EdgeInsets.all(20),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'AI Confidence Levels',
-                                          style: TextStyle(
-                                            color: SoftColors.textSecondary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        SizedBox(height: 12),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: _ConfidenceBar(
-                                                label: 'Low',
-                                                probability: latestData.mlOutputProbabilities![0],
-                                                color: SoftColors.riskLow,
-                                                isActive: latestData.riskLevel == 0,
-                                              ),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Expanded(
-                                              child: _ConfidenceBar(
-                                                label: 'Moderate',
-                                                probability: latestData.mlOutputProbabilities![1],
-                                                color: SoftColors.riskModerate,
-                                                isActive: latestData.riskLevel == 1,
-                                              ),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Expanded(
-                                              child: _ConfidenceBar(
-                                                label: 'High',
-                                                probability: latestData.mlOutputProbabilities![2],
-                                                color: SoftColors.riskHigh,
-                                                isActive: latestData.riskLevel == 2,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    SizedBox(height: 24),
 
                     // Quick Actions
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        'Quick Actions',
-                        style: TextStyle(
-                          color: SoftColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                        child: Text(
+                          'Quick Actions',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: ChemoColors.textPrimary,
+                          ),
                         ),
                       ),
                     ),
 
-                    SizedBox(height: 12),
-
-                    // Action Cards Grid
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ActionCard(
-                                  icon: Icons.add_chart_rounded,
-                                  label: 'Enter Vitals',
-                                  color: SoftColors.softGreen,
-                                  bgColor: SoftColors.paleGreen,
-                                  onTap: _navigateToVitalsEntry,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: _ActionCard(
-                                  icon: Icons.history_rounded,
-                                  label: 'View History',
-                                  color: SoftColors.primaryBlue,
-                                  bgColor: SoftColors.lightBlue,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => HealthHistoryScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ActionCard(
-                                  icon: Icons.chat_bubble_rounded,
-                                  label: 'AI Assistant',
-                                  color: SoftColors.softPurple,
-                                  bgColor: SoftColors.palePurple,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => ChatbotScreen()),
-                                    );
-                                  },
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: _ActionCard(
-                                  icon: Icons.message_rounded,
-                                  label: 'Message Doctor',
-                                  color: SoftColors.softGreen,
-                                  bgColor: SoftColors.paleGreen,
-                                  onTap: () async {
-                                    if (_userProfile?.assignedDoctorId != null) {
-                                      final doctorProfile = await _authService.getUserProfile(
-                                        _userProfile!.assignedDoctorId!,
-                                      );
-                                      
-                                      if (doctorProfile != null && mounted) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => ChatScreen(
-                                              otherUserId: doctorProfile.uid,
-                                              otherUserName: doctorProfile.name,
-                                              otherUserRole: 'doctor',
-                                            ),
-                                          ),
-                                        );
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Doctor profile not found'),
-                                            backgroundColor: SoftColors.riskModerate,
-                                          ),
-                                        );
-                                      }
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('No assigned doctor found'),
-                                          backgroundColor: SoftColors.riskModerate,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                        child: _buildQuickActions(),
                       ),
                     ),
-
-                    SizedBox(height: 32),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        // Avatar
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [ChemoColors.wisteriaBlue, ChemoColors.powderBlue],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              _userProfile?.name.isNotEmpty == true
+                  ? _userProfile!.name[0].toUpperCase()
+                  : 'P',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
             ),
-    );
-  }
-}
-
-// Vital Indicator Widget
-class _VitalIndicator extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final String unit;
-  final Color color;
-  final Color bgColor;
-
-  const _VitalIndicator({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.color,
-    required this.bgColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            color: SoftColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
           ),
         ),
-        Text(
-          unit,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            color: SoftColors.textSecondary,
-            fontSize: 10,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
-// Action Card Widget
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color bgColor;
-  final VoidCallback onTap;
+        const SizedBox(width: 12),
 
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.bgColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(20),
-          ),
+        // Greeting
+        Expanded(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color, size: 28),
-              ),
-              SizedBox(height: 12),
               Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: SoftColors.textPrimary,
-                  fontSize: 13,
+                'Hello, ${_userProfile?.name.split(' ').first ?? 'Patient'}!',
+                style: const TextStyle(
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
+                  color: ChemoColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Text(
+                DateFormat('EEEE, MMM dd').format(DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ChemoColors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
 
-// Confidence Bar Widget
-class _ConfidenceBar extends StatelessWidget {
-  final String label;
-  final double probability;
-  final Color color;
-  final bool isActive;
-
-  const _ConfidenceBar({
-    required this.label,
-    required this.probability,
-    required this.color,
-    required this.isActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          '${(probability * 100).toStringAsFixed(0)}%',
-          style: TextStyle(
-            color: isActive ? color : SoftColors.textSecondary,
-            fontSize: 16,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: 6),
+        // Settings Button
         Container(
-          height: 8,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: SoftColors.lightBlue,
-            borderRadius: BorderRadius.circular(4),
+            color: ChemoColors.honeydew,
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: probability,
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(4),
-              ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.settings_rounded,
+              color: ChemoColors.wisteriaBlue,
+              size: 20,
             ),
-          ),
-        ),
-        SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive ? color : SoftColors.textSecondary,
-            fontSize: 11,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+            padding: EdgeInsets.zero,
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildHeroCard() {
+    final riskColor = _getRiskColor();
+    final riskText = _getRiskLevelText();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            riskColor.withOpacity(0.15),
+            riskColor.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: riskColor.withOpacity(0.3),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: riskColor,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              riskText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Main Content Row - FIXED LAYOUT
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left Side - Image (Fixed width instead of Expanded)
+              Container(
+                width: MediaQuery.of(context).size.width *
+                    0.35, // 35% of screen width
+                height: 140,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: riskColor.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/images/chemo_care.png',
+                    fit: BoxFit.cover, // Changed to cover to show full image
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: riskColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.local_hospital_rounded,
+                            size: 40,
+                            color: riskColor.withOpacity(0.4),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              // Right Side - Text Content (Takes remaining space)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Title
+                    Text(
+                      'Your Care\nJourney',
+                      style: TextStyle(
+                        fontSize: 22, // Slightly smaller
+                        fontWeight: FontWeight.bold,
+                        color: ChemoColors.textPrimary,
+                        height: 1.2,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Subtitle
+                    Text(
+                      _latestHealthData != null
+                          ? 'Last check: ${_getTimeAgo(_latestHealthData!.timestamp)}'
+                          : 'Track your vitals daily',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: ChemoColors.textSecondary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Motivational Message - SOLID COLOR SECTION
+                    Container(
+                      padding: const EdgeInsets.all(12), // Increased padding
+                      decoration: BoxDecoration(
+                        color: riskColor.withOpacity(0.8), // More solid color
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: riskColor.withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.favorite_rounded,
+                            size: 16,
+                            color: Colors.white, // White icon for contrast
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Stay strong on your journey',
+                              style: TextStyle(
+                                fontSize: 13, // Slightly larger
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white, // White text for contrast
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVitalsSummaryRow() {
+    final data = _latestHealthData!;
+
+    return Row(
+      children: [
+        // Heart Rate Card
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.favorite_rounded,
+                      color: ChemoColors.pastelPetal,
+                      size: 20,
+                    ),
+                    const Spacer(),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Heart Rate',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ChemoColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '${data.heartRate}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: ChemoColors.textPrimary,
+                          ),
+                        ),
+                        const Text(
+                          ' bpm',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ChemoColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        // SpO2 Card
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.air_rounded,
+                      color: ChemoColors.frozenWater,
+                      size: 20,
+                    ),
+                    const Spacer(),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Oxygen',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ChemoColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '${data.spo2Level}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: ChemoColors.textPrimary,
+                          ),
+                        ),
+                        const Text(
+                          ' %',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ChemoColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDoctorCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white, // Changed to white background
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Doctor Avatar
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [ChemoColors.wisteriaBlue, ChemoColors.powderBlue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.medical_services_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Doctor Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Your Doctor',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ChemoColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  'Dr. ${_userProfile?.assignedDoctorId?.substring(0, 8) ?? 'Assigned'}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: ChemoColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+
+          // Message Button - Redesigned like image
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: ChemoColors.wisteriaBlue, // Solid color background
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: ChemoColors.wisteriaBlue.withOpacity(0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.message_rounded,
+                color: Colors.white, // White icon
+                size: 20,
+              ),
+              onPressed: _navigateToChatWithDoctor,
+              padding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                icon: Icons.add_circle_rounded,
+                label: 'Enter Vitals',
+                color: ChemoColors.wisteriaBlue,
+                onTap: _navigateToVitalsEntry,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                icon: Icons.history_rounded,
+                label: 'History',
+                color: ChemoColors.powderBlue,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HealthHistoryScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                icon: Icons.smart_toy_rounded,
+                label: 'AI Help',
+                color: ChemoColors.frozenWater,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatbotScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: color,
+                  size: 28,
+                ),
+                const SizedBox(height: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: ChemoColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getTimeAgo(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    if (difference.inDays < 7) return '${difference.inDays}d ago';
+    return DateFormat('MMM dd').format(timestamp);
   }
 }

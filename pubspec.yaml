@@ -1,5 +1,5 @@
 name: chemo_monitor_app
-description: A Flutter chemotherapy monitoring application with ML predictions
+description: AI-Integrated Chemotherapy Patient Monitoring App
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,75 +9,71 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # Firebase Core
+  
+  # Firebase
   firebase_core: ^2.24.2
-  firebase_auth: ^4.15.3
-  cloud_firestore: ^4.13.6
-  firebase_messaging: ^14.7.9  # 🔔 NEW: Push Notifications
-
-  # UI & Icons
-  cupertino_icons: ^1.0.2
-  google_fonts: ^6.1.0  # 🎨 NEW: Beautiful fonts
-  flutter_svg: ^2.0.9  # 🎨 NEW: Vector illustrations
-  lottie: ^3.0.0  # 🎨 NEW: Animations
-  shimmer: ^3.0.0  # 🎨 NEW: Loading effects
-
-  # Charts & Graphs
-  fl_chart: ^0.65.0  # 📊 NEW: Health graphs
-  syncfusion_flutter_charts: ^24.1.41  # 📊 Alternative charts
-
-  # ML & AI
-  tflite_flutter: ^0.11.0
-  http: ^1.1.0
+  firebase_auth: ^4.17.2
+  cloud_firestore: ^4.15.1
+  firebase_storage: ^11.6.0
+  
+  # UI & Design
+  animations: ^2.0.8
+  font_awesome_flutter: ^10.7.0  # ✅ CHANGED from flutter_vector_icons
+  line_icons: ^2.0.3
+  shimmer: ^3.0.0
+  
+  # Charts & Visualization
+  fl_chart: ^0.66.2  # ✅ Updated to latest stable version
   
   # File Handling
-  image_picker: ^1.0.5
+  image_picker: ^1.0.7
   file_picker: ^8.0.0
   cloudinary_public: ^0.21.0
   
+  # HTTP & APIs
+  http: ^1.2.0
+  
   # Utilities
-  uuid: ^4.2.2
   intl: ^0.19.0
-  flutter_dotenv: ^5.1.0
   crypto: ^3.0.3
+  uuid: ^4.3.3
   
-  # Simple audio for alert sounds (optional)
-  audioplayers: ^5.2.1  # 🔔 For alert sounds
+  # ML
+  tflite_flutter: ^0.11.0
   
-  # State Management
-  provider: ^6.1.1  # For notification state
+  # Environment
+  flutter_dotenv: ^5.1.0
+  
+  # Markdown for chatbot
+  flutter_markdown: ^0.6.18
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.13.1  # 🎨 NEW: Custom app icon
-  flutter_lints: ^3.0.0
-
-# App Icon Configuration
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/icons/app_icon.png"
+  flutter_lints: ^3.0.1
+  flutter_svg: ^2.0.10
 
 flutter:
   uses-material-design: true
-
+  
   assets:
     - .env
-    - assets/models/model.tflite
     - assets/images/
-    - assets/icons/
-    - assets/animations/  # 🎨 NEW: Lottie animations
-    - assets/illustrations/doctor.jpg  # 🎨 NEW: Vector illustrations
-
+    - assets/animations/
+    - assets/fonts/
+    - assets/models/model.tflite
+    - assets/images/chemo_care.png
+  
   fonts:
     - family: Poppins
       fonts:
         - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
         - asset: assets/fonts/Poppins-Medium.ttf
           weight: 500
         - asset: assets/fonts/Poppins-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+        
+          

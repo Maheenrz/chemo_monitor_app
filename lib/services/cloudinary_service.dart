@@ -25,70 +25,107 @@ class CloudinaryService {
     cloudinary = CloudinaryPublic(cloudName, uploadPreset, cache: false);
   }
 
-  /// Upload image (used by Profile Edit Screen)
-  /// [imageFile] - The image file to upload
-  /// [folder] - Optional folder name in Cloudinary (e.g., 'profile_images')
-  /// Returns the secure URL of the uploaded image
-  Future<String> uploadImage(File imageFile, {String? folder}) async {
+  /// Upload any file (image or document) for chat
+  /// Returns Map with 'url' and 'fileName'
+  Future<Map<String, String>> uploadChatFile(File file, {String? customFileName}) async {
     try {
-      CloudinaryResponse response = await cloudinary.uploadFile(
-        CloudinaryFile.fromFile(
-          imageFile.path,
-          folder: folder ?? 'uploads',
-          resourceType: CloudinaryResourceType.Image,
-        ),
-      );
-
-      return response.secureUrl;
-    } catch (e) {
-      throw Exception('Image upload failed: $e');
-    }
-  }
-
-  /// Upload any file (image or document)
-  /// Returns URL of uploaded file
-  Future<String> uploadFile({
-    required File file,
-    required String folder,
-    String? fileName,
-  }) async {
-    try {
+      // Extract original filename or use custom name
+      final originalFileName = file.path.split('/').last;
+      final fileName = customFileName ?? originalFileName;
+      
       CloudinaryResponse response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
           file.path,
-          folder: folder,
+          folder: 'chat_files',
           resourceType: CloudinaryResourceType.Auto,
         ),
       );
 
-      return response.secureUrl;
+      return {
+        'url': response.secureUrl,
+        'fileName': fileName,
+        'publicId': response.publicId,
+      };
     } catch (e) {
-      throw Exception('Upload failed: $e');
+      throw Exception('Chat file upload failed: $e');
     }
   }
 
   /// Upload profile picture
-  Future<String> uploadProfilePicture(File imageFile, String userId) async {
-    return await uploadImage(
-      imageFile,
-      folder: 'profile_images',
-    );
+  /// Returns Map with 'url' and 'publicId'
+  Future<Map<String, String>> uploadProfilePicture(File imageFile, String userId) async {
+    try {
+      CloudinaryResponse response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          imageFile.path,
+          folder: 'profile_images',
+          resourceType: CloudinaryResourceType.Image,
+        ),
+      );
+
+      return {
+        'url': response.secureUrl,
+        'publicId': response.publicId,
+      };
+    } catch (e) {
+      throw Exception('Profile picture upload failed: $e');
+    }
   }
 
-  /// Upload medical document
-  Future<String> uploadMedicalDocument(File file, String patientId) async {
-    return await uploadFile(
-      file: file,
-      folder: 'patient_documents/$patientId',
-    );
+  /// Get file type from URL
+  String getFileType(String url) {
+    if (url.contains('.jpg') || url.contains('.jpeg') || 
+        url.contains('.png') || url.contains('.gif') || url.contains('.webp')) {
+      return 'image';
+    } else if (url.contains('.pdf')) {
+      return 'pdf';
+    } else if (url.contains('.doc') || url.contains('.docx')) {
+      return 'document';
+    } else if (url.contains('.txt')) {
+      return 'text';
+    } else {
+      return 'file';
+    }
   }
 
-  /// Upload chat attachment
-  Future<String> uploadChatAttachment(File file, String chatId) async {
-    return await uploadFile(
-      file: file,
-      folder: 'chat_attachments/$chatId',
-    );
+  /// Get file type from File object
+  String getFileTypeFromFile(File file) {
+    final path = file.path.toLowerCase();
+    if (path.endsWith('.jpg') || path.endsWith('.jpeg') || 
+        path.endsWith('.png') || path.endsWith('.gif') || path.endsWith('.webp')) {
+      return 'image';
+    } else if (path.endsWith('.pdf')) {
+      return 'pdf';
+    } else if (path.endsWith('.doc') || path.endsWith('.docx')) {
+      return 'document';
+    } else if (path.endsWith('.txt')) {
+      return 'text';
+    } else {
+      return 'file';
+    }
+  }
+
+  /// Get file name from file path
+  String getFileNameFromPath(String filePath) {
+    return filePath.split('/').last;
+  }
+
+  /// Extract filename from Cloudinary URL
+  String extractFileNameFromUrl(String cloudinaryUrl) {
+    try {
+      final uri = Uri.parse(cloudinaryUrl);
+      final pathSegments = uri.pathSegments;
+      
+      if (pathSegments.isEmpty) return 'file';
+      
+      final lastSegment = pathSegments.last;
+      final decodedLastSegment = Uri.decodeComponent(lastSegment);
+      
+      return decodedLastSegment;
+    } catch (e) {
+      print('Error extracting filename: $e');
+      return 'file';
+    }
   }
 
   /// Delete file from Cloudinary
@@ -123,18 +160,14 @@ class CloudinaryService {
 
   /// Generate signature for authenticated requests (SHA-1)
   String _generateSignature(Map<String, dynamic> params) {
-    // Sort parameters alphabetically
     final sortedKeys = params.keys.toList()..sort();
     
-    // Create the string to sign
     final stringToSign = sortedKeys
         .map((key) => '$key=${params[key]}')
         .join('&');
     
-    // Add API secret
     final fullString = '$stringToSign$apiSecret';
     
-    // Generate SHA-1 hash
     final bytes = utf8.encode(fullString);
     final digest = sha1.convert(bytes);
     
@@ -142,23 +175,18 @@ class CloudinaryService {
   }
 
   /// Extract public ID from Cloudinary URL
-  /// Example: https://res.cloudinary.com/demo/image/upload/v1234567890/profile_images/abc123.jpg
-  /// Returns: profile_images/abc123
   String extractPublicId(String cloudinaryUrl) {
     try {
       final uri = Uri.parse(cloudinaryUrl);
       final pathSegments = uri.pathSegments;
       
-      // Find the index of 'upload'
       final uploadIndex = pathSegments.indexOf('upload');
       if (uploadIndex == -1 || uploadIndex + 2 >= pathSegments.length) {
         throw Exception('Invalid Cloudinary URL');
       }
       
-      // Get everything after the version (v1234567890)
       final relevantSegments = pathSegments.sublist(uploadIndex + 2);
       
-      // Join and remove file extension
       final publicIdWithExt = relevantSegments.join('/');
       final lastDotIndex = publicIdWithExt.lastIndexOf('.');
       
@@ -209,66 +237,3 @@ class CloudinaryService {
     );
   }
 }
-
-// ============================================================================
-// SETUP INSTRUCTIONS FOR .ENV FILE
-// ============================================================================
-
-/*
-
-1. YOUR .ENV FILE SHOULD CONTAIN:
-   ```
-   CLOUDINARY_CLOUD_NAME=your_cloud_name
-   CLOUDINARY_API_KEY=your_api_key
-   CLOUDINARY_API_SECRET=your_api_secret
-   CLOUDINARY_UPLOAD_PRESET=your_upload_preset
-   ```
-
-2. MAKE SURE flutter_dotenv IS IN pubspec.yaml:
-   ```yaml
-   dependencies:
-     flutter_dotenv: ^5.1.0
-     cloudinary_public: ^0.21.0
-     image_picker: ^1.0.4
-     http: ^1.1.0
-     crypto: ^3.0.3
-   ```
-
-3. ADD .ENV TO ASSETS in pubspec.yaml:
-   ```yaml
-   flutter:
-     assets:
-       - .env
-   ```
-
-4. LOAD .ENV IN main.dart:
-   ```dart
-   import 'package:flutter_dotenv/flutter_dotenv.dart';
-   
-   Future<void> main() async {
-     await dotenv.load(fileName: ".env");
-     runApp(MyApp());
-   }
-   ```
-
-5. MAKE SURE .ENV IS IN .gitignore:
-   ```
-   .env
-   ```
-
-6. USAGE EXAMPLE:
-   ```dart
-   final cloudinaryService = CloudinaryService();
-   
-   try {
-     final imageUrl = await cloudinaryService.uploadImage(
-       imageFile,
-       folder: 'profile_images',
-     );
-     print('Uploaded: $imageUrl');
-   } catch (e) {
-     print('Error: $e');
-   }
-   ```
-
-*/

@@ -1,8 +1,58 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:flutter/material.dart';
+import 'package:chemo_monitor_app/config/app_constants.dart';
+import 'dart:ui';
+
+// Add this class at the top of notification_service.dart
+class NotificationModel {
+  final String id;
+  final String type;
+  final String doctorId;
+  final String patientId;
+  final String patientName;
+  final String message;
+  final int riskLevel;
+  final DateTime timestamp;
+  final bool read;
+  final String priority;
+  final Map<String, dynamic>? vitals;
+
+  NotificationModel({
+    required this.id,
+    required this.type,
+    required this.doctorId,
+    required this.patientId,
+    required this.patientName,
+    required this.message,
+    required this.riskLevel,
+    required this.timestamp,
+    required this.read,
+    required this.priority,
+    this.vitals,
+  });
+
+  factory NotificationModel.fromMap(Map<String, dynamic> data) {
+    return NotificationModel(
+      id: data['id'] ?? '',
+      type: data['type'] ?? '',
+      doctorId: data['doctorId'] ?? '',
+      patientId: data['patientId'] ?? '',
+      patientName: data['patientName'] ?? '',
+      message: data['message'] ?? '',
+      riskLevel: data['riskLevel'] ?? 0,
+      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      read: data['read'] ?? false,
+      priority: data['priority'] ?? 'normal',
+      vitals: data['vitals'] is Map
+          ? Map<String, dynamic>.from(data['vitals'])
+          : null,
+    );
+  }
+}
+
 /// ✅ SIMPLE Notification Service - Uses only Firestore
-/// No complex FCM setup needed - works immediately!
+/// Updated with Glassmorphism UI and AppColors integration
 class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -25,10 +75,12 @@ class NotificationService {
         'patientId': patientId,
         'patientName': patientName,
         'riskLevel': healthData.riskLevel,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': Timestamp
+            .now(), // ✅ FIXED: Use Timestamp.now() instead of serverTimestamp()
         'read': false,
-        'priority': 'urgent', // For sorting
-        'message': '$patientName has HIGH RISK vitals that need immediate attention!',
+        'priority': 'urgent',
+        'message':
+            '$patientName has HIGH RISK vitals that need immediate attention!',
         'vitals': {
           'heartRate': healthData.heartRate,
           'spo2': healthData.spo2Level,
@@ -36,6 +88,7 @@ class NotificationService {
           'systolicBP': healthData.systolicBP,
           'diastolicBP': healthData.diastolicBP,
         },
+        'riskColor': _getRiskColorHex(healthData.riskLevel),
       });
 
       print('✅ HIGH RISK alert sent to doctor');
@@ -58,10 +111,12 @@ class NotificationService {
         'patientId': patientId,
         'patientName': patientName,
         'riskLevel': healthData.riskLevel,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': Timestamp
+            .now(), // ✅ FIXED: Use Timestamp.now() instead of serverTimestamp()
         'read': false,
         'priority': 'normal',
-        'message': '$patientName\'s vitals show moderate risk and need monitoring.',
+        'message':
+            '$patientName\'s vitals show moderate risk and need monitoring.',
         'vitals': {
           'heartRate': healthData.heartRate,
           'spo2': healthData.spo2Level,
@@ -69,6 +124,7 @@ class NotificationService {
           'systolicBP': healthData.systolicBP,
           'diastolicBP': healthData.diastolicBP,
         },
+        'riskColor': _getRiskColorHex(healthData.riskLevel),
       });
 
       print('✅ MODERATE RISK notification sent');
@@ -96,12 +152,13 @@ class NotificationService {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            Map<String, dynamic> data = doc.data();
-            data['id'] = doc.id; // Add document ID
-            return data;
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data();
+        data['id'] = doc.id;
+        data['timestamp'] = (data['timestamp'] as Timestamp?)?.toDate();
+        return data;
+      }).toList();
+    });
   }
 
   /// 🚨 Get URGENT notifications only
@@ -114,12 +171,13 @@ class NotificationService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            Map<String, dynamic> data = doc.data();
-            data['id'] = doc.id;
-            return data;
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data();
+        data['id'] = doc.id;
+        data['timestamp'] = (data['timestamp'] as Timestamp?)?.toDate();
+        return data;
+      }).toList();
+    });
   }
 
   /// ✅ Mark notification as READ
@@ -187,82 +245,206 @@ class NotificationService {
     }
   }
 
-  /// 🔔 Show in-app alert dialog (call this when urgent notification arrives)
-  static void showAlertDialog(BuildContext context, Map<String, dynamic> notification) {
+  /// 🔔 Show in-app alert dialog (Glassmorphism style)
+  static void showAlertDialog(
+      BuildContext context, Map<String, dynamic> notification) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_rounded, color: Colors.red, size: 32),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'URGENT ALERT',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.all(20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(AppDimensions.radiusXL),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1,
+            ),
+            boxShadow: AppShadows.elevation3,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusXL),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Padding(
+                padding: EdgeInsets.all(AppDimensions.paddingLarge),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _getRiskColor(notification['riskLevel'] ?? 2)
+                                .withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(
+                                AppDimensions.radiusCircle),
+                          ),
+                          child: Icon(
+                            Icons.warning_rounded,
+                            color:
+                                _getRiskColor(notification['riskLevel'] ?? 2),
+                            size: 32,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'URGENT ALERT',
+                            style: AppTextStyles.heading3.copyWith(
+                              color:
+                                  _getRiskColor(notification['riskLevel'] ?? 2),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: AppDimensions.spaceL),
+                    Text(
+                      notification['message'] ?? 'Patient needs attention',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: AppDimensions.spaceL),
+                    if (notification['vitals'] != null) ...[
+                      Container(
+                        padding: EdgeInsets.all(AppDimensions.paddingMedium),
+                        decoration: BoxDecoration(
+                          color: AppColors.lightBlue.withOpacity(0.3),
+                          borderRadius:
+                              BorderRadius.circular(AppDimensions.radiusLarge),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Current Vitals:',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: AppDimensions.spaceM),
+                            _buildVitalRow('Heart Rate',
+                                '${notification['vitals']['heartRate']} bpm'),
+                            _buildVitalRow(
+                                'SpO2', '${notification['vitals']['spo2']}%'),
+                            _buildVitalRow('Temperature',
+                                '${notification['vitals']['temperature']}°C'),
+                            _buildVitalRow('Blood Pressure',
+                                '${notification['vitals']['systolicBP']}/${notification['vitals']['diastolicBP']} mmHg'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: AppDimensions.spaceXL),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.textSecondary,
+                          ),
+                          child: Text(
+                            'Dismiss',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: AppDimensions.spaceM),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            // Navigate to patient detail screen would be implemented here
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                _getRiskColor(notification['riskLevel'] ?? 2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                  AppDimensions.radiusMedium),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppDimensions.paddingLarge,
+                              vertical: AppDimensions.paddingMedium,
+                            ),
+                          ),
+                          child: Text(
+                            'View Patient',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              notification['message'] ?? 'Patient needs attention',
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 16),
-            if (notification['vitals'] != null) ...[
-              Text(
-                'Current Vitals:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              _buildVitalRow('Heart Rate', '${notification['vitals']['heartRate']} bpm'),
-              _buildVitalRow('SpO2', '${notification['vitals']['spo2']}%'),
-              _buildVitalRow('Temperature', '${notification['vitals']['temperature']}°C'),
-              _buildVitalRow('BP', '${notification['vitals']['systolicBP']}/${notification['vitals']['diastolicBP']} mmHg'),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Dismiss', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Navigate to patient detail screen
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text('View Patient'),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   static Widget _buildVitalRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[700])),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  static Color _getRiskColor(int? riskLevel) {
+    // ✅ Changed int to int?
+    switch (riskLevel) {
+      case 0:
+        return AppColors.riskLow;
+      case 1:
+        return AppColors.riskModerate;
+      case 2:
+        return AppColors.riskHigh;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  static String _getRiskColorHex(int? riskLevel) {
+    // ✅ Changed int to int?
+    switch (riskLevel) {
+      case 0:
+        return '#6FD195';
+      case 1:
+        return '#FAB87F';
+      case 2:
+        return '#F08B9C';
+      default:
+        return '#8E9AAF';
+    }
   }
 }

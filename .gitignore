@@ -61,6 +61,7 @@ firebase.json
 *.env
 *.key
 *.pem
+.env.local
 
 # ML Models (if large)
 # assets/models/*.tflite

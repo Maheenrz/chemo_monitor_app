@@ -2,19 +2,30 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:chemo_monitor_app/services/cloudinary_service.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
+import 'package:chemo_monitor_app/services/messaging_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FileUploadWidget extends StatefulWidget {
   final Function(String fileUrl) onFileUploaded;
   final String uploadType; // 'image', 'document', 'any'
   final String folder;
+  final String? currentUserId;
+  final String? currentUserName;
+  final String? receiverId;
+  final String? receiverName;
+  final bool forMessaging; // NEW: Specify if for messaging
 
   const FileUploadWidget({
     super.key,
     required this.onFileUploaded,
     this.uploadType = 'any',
     required this.folder,
+    this.currentUserId,
+    this.currentUserName,
+    this.receiverId,
+    this.receiverName,
+    this.forMessaging = false, // Default to false
   });
 
   @override
@@ -22,7 +33,7 @@ class FileUploadWidget extends StatefulWidget {
 }
 
 class _FileUploadWidgetState extends State<FileUploadWidget> {
-  final CloudinaryService _cloudinaryService = CloudinaryService();
+  final MessagingService _messagingService = MessagingService();
   bool _uploading = false;
 
   Future<void> _pickAndUploadImage() async {
@@ -62,16 +73,35 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     setState(() => _uploading = true);
 
     try {
-      String fileUrl = await _cloudinaryService.uploadFile(
-        file: file,
-        folder: widget.folder,
-      );
-
-      widget.onFileUploaded(fileUrl);
+      // FOR MESSAGING: Use MessagingService
+      if (widget.forMessaging && 
+          widget.currentUserId != null && 
+          widget.currentUserName != null && 
+          widget.receiverId != null && 
+          widget.receiverName != null) {
+        
+        // Use the CORRECT method: sendFileMessage
+        await _messagingService.sendFileMessage(
+          senderId: widget.currentUserId!,
+          senderName: widget.currentUserName!,
+          receiverId: widget.receiverId!,
+          receiverName: widget.receiverName!,
+          file: file,
+        );
+        
+        // Call the callback (you might want to modify MessagingService to return URL)
+        widget.onFileUploaded('file_uploaded_for_messaging');
+        
+      } else {
+        // FOR PROFILE/OTHER UPLOADS: Use CloudinaryService directly
+        // You need to inject CloudinaryService or create a separate method
+        // For now, throw error or handle differently
+        throw Exception('File upload for non-messaging not implemented yet');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('File uploaded successfully!'),
             backgroundColor: AppColors.success,
           ),
@@ -98,7 +128,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   @override
   Widget build(BuildContext context) {
     if (_uploading) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -115,19 +145,19 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         if (widget.uploadType == 'image' || widget.uploadType == 'any')
           ElevatedButton.icon(
             onPressed: _pickAndUploadImage,
-            icon: Icon(Icons.image),
-            label: Text('Upload Image'),
+            icon: const Icon(Icons.image),
+            label: const Text('Upload Image'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
           ),
-        if (widget.uploadType == 'any') SizedBox(height: 8),
+        if (widget.uploadType == 'any') const SizedBox(height: 8),
         if (widget.uploadType == 'document' || widget.uploadType == 'any')
           ElevatedButton.icon(
             onPressed: _pickAndUploadDocument,
-            icon: Icon(Icons.file_present),
-            label: Text('Upload Document'),
+            icon: const Icon(Icons.file_present),
+            label: const Text('Upload Document'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,

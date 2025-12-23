@@ -122,22 +122,31 @@ class AuthService {
   }
 
   // Helper: Validate Doctor Code (Required for registerPatient)
-  Future<String?> validateDoctorCode(String code) async {
-    try {
-      QuerySnapshot query = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'doctor')
-          .where('doctorCode', isEqualTo: code) // Matches the field saved in registerDoctor
-          .get();
+  // Helper: Validate Doctor Code (Required for registerPatient)
+Future<String?> validateDoctorCode(String code) async {
+  try {
+    QuerySnapshot query = await _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'doctor')
+        .where('doctorCode', isEqualTo: code)
+        .limit(1)
+        .get();
 
-      if (query.docs.isNotEmpty) {
-        return query.docs.first.id; // Return the Doctor's UID
-      }
-    } catch (e) {
-      print("Error validating code: $e");
+    if (query.docs.isNotEmpty) {
+      final doc = query.docs.first;
+      final data = doc.data() as Map<String, dynamic>;
+      // Return the UID from the document data
+      return data['uid'] ?? doc.id;
     }
-    return null;
+  } on FirebaseException catch (e) {
+    print("Firestore error validating code: ${e.code} - ${e.message}");
+    throw Exception("Unable to validate doctor code. Please check your connection.");
+  } catch (e) {
+    print("Error validating code: $e");
+    throw Exception("Invalid doctor code or server error.");
   }
+  return null;
+}
 
   // Helper: Generate 6-digit code
   String _generateDoctorCode() {
