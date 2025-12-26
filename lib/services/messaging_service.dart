@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chemo_monitor_app/models/message_model.dart';
 import 'package:chemo_monitor_app/services/cloudinary_service.dart';
-import 'package:chemo_monitor_app/services/chat_initializer.dart';
+import 'package:chemo_monitor_app/services/chat_initializer_service.dart';
 
 class MessagingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

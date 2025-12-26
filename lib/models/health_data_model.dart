@@ -117,4 +117,46 @@ class HealthDataModel {
       temperature,
     ];
   }
+
+  // Add these methods to your existing HealthDataModel class:
+
+/// Get specific concerns based on vitals
+List<String> getSpecificConcerns() {
+  final concerns = <String>[];
+  
+  if (temperature > 37.5) concerns.add('Elevated temperature');
+  if (temperature > 38.0) concerns.add('Fever detected');
+  if (spo2Level < 95) concerns.add('Low oxygen saturation');
+  if (spo2Level < 92) concerns.add('Severely low oxygen');
+  if (heartRate > 100) concerns.add('Elevated heart rate');
+  if (heartRate > 120) concerns.add('Very high heart rate');
+  if (systolicBP > 140) concerns.add('High blood pressure');
+  
+  return concerns;
+}
+
+/// Get risk description
+String getRiskDescription() {
+  switch (riskLevel) {
+    case 0:
+      return 'Low Risk\nYour vitals are within safe ranges. Continue monitoring as usual.';
+    case 1:
+      return 'Moderate Risk\nSome vitals are elevated. Rest and recheck in 1-2 hours.';
+    case 2:
+      return 'High Risk\nMedical attention recommended. Contact your healthcare team.';
+    default:
+      return 'Risk assessment pending';
+  }
+}
+
+/// Get recommended action
+String getRecommendedAction() {
+  if (riskLevel == 2) {
+    return '• Contact your oncology team immediately\n• Rest and avoid exertion\n• Drink plenty of fluids\n• Monitor temperature hourly';
+  } else if (riskLevel == 1) {
+    return '• Rest for 1-2 hours\n• Recheck vitals\n• Stay hydrated\n• Report if symptoms worsen';
+  } else {
+    return '• Continue normal activities\n• Maintain hydration\n• Record next reading as scheduled';
+  }
+}
 }

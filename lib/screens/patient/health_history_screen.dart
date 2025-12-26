@@ -1,3 +1,4 @@
+// lib/screens/patient/health_history_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
@@ -5,7 +6,7 @@ import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:chemo_monitor_app/services/health_data_service.dart';
 import 'package:intl/intl.dart';
 import 'package:chemo_monitor_app/widgets/common/ml_confidence_widget.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:chemo_monitor_app/widgets/common/glass_card.dart';
 import 'package:chemo_monitor_app/widgets/common/glass_button.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -24,7 +25,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   bool _isLoading = true;
   String _selectedFilter = 'All';
   String _selectedTimeframe = 'Last 7 days';
-  int _selectedTab = 0; // 0 = List, 1 = Charts
+  int _viewMode = 0; // 0 = List, 1 = Charts
+  int _selectedChartType = 0; // 0 = Heart Rate, 1 = SpO2, 2 = Temperature, 3 = Blood Pressure
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       final data = snapshot.docs
           .map((doc) => HealthDataModel.fromMap(doc.data()))
           .toList();
-      
+
       if (mounted) {
         setState(() {
           _healthData = data;
@@ -63,22 +65,22 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
 
   List<HealthDataModel> get _filteredData {
     List<HealthDataModel> data = List.from(_healthData);
-    
+
     final now = DateTime.now();
     if (_selectedTimeframe == 'Last 7 days') {
-      data = data.where((item) => 
-        item.timestamp.isAfter(now.subtract(const Duration(days: 7)))
+      data = data.where((item) =>
+          item.timestamp.isAfter(now.subtract(const Duration(days: 7)))
       ).toList();
     } else if (_selectedTimeframe == 'Last 30 days') {
-      data = data.where((item) => 
-        item.timestamp.isAfter(now.subtract(const Duration(days: 30)))
+      data = data.where((item) =>
+          item.timestamp.isAfter(now.subtract(const Duration(days: 30)))
       ).toList();
     } else if (_selectedTimeframe == 'Last 3 months') {
-      data = data.where((item) => 
-        item.timestamp.isAfter(now.subtract(const Duration(days: 90)))
+      data = data.where((item) =>
+          item.timestamp.isAfter(now.subtract(const Duration(days: 90)))
       ).toList();
     }
-    
+
     if (_selectedFilter == 'High Risk') {
       data = data.where((item) => item.riskLevel == 2).toList();
     } else if (_selectedFilter == 'Moderate Risk') {
@@ -86,7 +88,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     } else if (_selectedFilter == 'Low Risk') {
       data = data.where((item) => item.riskLevel == 0).toList();
     }
-    
+
     return data;
   }
 
@@ -138,12 +140,12 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   List<FlSpot> _getChartData(String type) {
     final sortedData = List.from(_filteredData)
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     return sortedData.asMap().entries.map((entry) {
       final index = entry.key;
       final data = entry.value;
       double value;
-      
+
       switch (type) {
         case 'Heart Rate':
           value = data.heartRate.toDouble();
@@ -160,90 +162,101 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         default:
           value = 0;
       }
-      
+
       return FlSpot(index.toDouble(), value);
     }).toList();
   }
 
   Widget _buildChartSection() {
     final chartTypes = ['Heart Rate', 'SpO2', 'Temperature', 'Blood Pressure'];
-    final selectedSpots = _getChartData(chartTypes[_selectedTab]);
-    
+    final selectedChartType = chartTypes[_selectedChartType];
+    final selectedSpots = _getChartData(selectedChartType);
+    final timestamps = _getTimestampsForSelectedChart();
+
     if (selectedSpots.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bar_chart_rounded, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
-            const SizedBox(height: 16),
-            Text(
-              'No data for charts',
-              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      );
+      return _buildNoDataChart(selectedChartType);
     }
-    
+
     return Column(
       children: [
+        // Chart Type Selector (Moved to top)
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: chartTypes.asMap().entries.map((entry) {
               final index = entry.key;
               final type = entry.value;
-              final isSelected = _selectedTab == index;
-              
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
+              final isSelected = _selectedChartType == index;
+
+              return Container(
+                margin: const EdgeInsets.only(right: 8),
                 child: GlassButton(
-                  onPressed: () => setState(() => _selectedTab = index),
+                  onPressed: () {
+                    setState(() => _selectedChartType = index);
+                  },
                   text: type,
-                  type: isSelected ? ButtonType.primary : ButtonType.secondary,
+                  type: ButtonType.primary,
                   isSelected: isSelected,
-                  height: 36,
+                  height: 40,
                 ),
               );
             }).toList(),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
+        // Chart title with statistics
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    selectedChartType,
+                    style: AppTextStyles.heading3.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${selectedSpots.length} readings • $_selectedTimeframe',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              _buildChartStats(selectedSpots, selectedChartType),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // The chart itself
         GlassCard(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Text(
-                chartTypes[_selectedTab],
-                style: AppTextStyles.heading3.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              Container(
-                height: 200,
+              SizedBox(
+                height: 280,
                 child: LineChart(
                   ChartUtils.createHealthChart(
                     spots: selectedSpots,
-                    chartType: chartTypes[_selectedTab],
-                    minY: _getMinY(selectedSpots),
-                    maxY: _getMaxY(selectedSpots),
+                    chartType: selectedChartType,
+                    timestamps: timestamps,
                   ),
                 ),
               ),
-              
-              const SizedBox(height: 12),
-              
-              Text(
-                'Trend over ${_selectedTimeframe.toLowerCase()}',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
+
+              const SizedBox(height: 16),
+
+              // Legend
+              _buildChartLegend(selectedChartType),
             ],
           ),
         ),
@@ -251,22 +264,314 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     );
   }
 
-  double _getMinY(List<FlSpot> spots) {
-    if (spots.isEmpty) return 0;
-    double min = spots.first.y;
-    for (final spot in spots) {
-      if (spot.y < min) min = spot.y;
-    }
-    return min - (min * 0.1);
+  Widget _buildNoDataChart(String chartType) {
+    return GlassCard(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.bar_chart_rounded,
+            size: 64,
+            color: AppColors.textSecondary.withOpacity(0.3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No $chartType Data Available',
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Record some health data to see charts',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 
-  double _getMaxY(List<FlSpot> spots) {
-    if (spots.isEmpty) return 100;
-    double max = spots.first.y;
-    for (final spot in spots) {
-      if (spot.y > max) max = spot.y;
+  Widget _buildChartStats(List<FlSpot> spots, String chartType) {
+    if (spots.isEmpty) return Container();
+
+    final values = spots.map((spot) => spot.y).toList();
+    final avg = values.reduce((a, b) => a + b) / values.length;
+    final min = values.reduce((curr, next) => curr < next ? curr : next);
+    final max = values.reduce((curr, next) => curr > next ? curr : next);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          'Avg: ${avg.toStringAsFixed(1)}',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          'Range: ${min.toInt()}-${max.toInt()}',
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChartLegend(String chartType) {
+    final config = _getVitalConfigForLegend(chartType);
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 8,
+      alignment: WrapAlignment.center,
+      children: [
+        _buildLegendItem(
+          color: config['lineColor'],
+          label: 'Your Readings',
+        ),
+        _buildLegendItem(
+          color: AppColors.softGreen.withOpacity(0.3),
+          label: 'Normal Range',
+          isDashed: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLegendItem({
+    required Color color,
+    required String label,
+    bool isDashed = false,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 3,
+          decoration: BoxDecoration(
+            color: isDashed ? Colors.transparent : color,
+            borderRadius: BorderRadius.circular(1.5),
+            border: isDashed
+                ? Border.all(color: color, width: 2)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper methods
+  List<DateTime> _getTimestampsForSelectedChart() {
+    final sortedData = List.from(_filteredData)
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return sortedData.map<DateTime>((data) => data.timestamp as DateTime).toList();
+  }
+
+  Map<String, dynamic> _getVitalConfigForLegend(String chartType) {
+    switch (chartType) {
+      case 'Heart Rate':
+        return {'lineColor': AppColors.pastelPetal, 'criticalLow': 40, 'criticalHigh': 140};
+      case 'SpO2':
+        return {'lineColor': AppColors.wisteriaBlue, 'criticalLow': 90, 'criticalHigh': 100};
+      case 'Temperature':
+        return {'lineColor': AppColors.powderBlue, 'criticalLow': 35, 'criticalHigh': 38.5};
+      case 'Blood Pressure':
+        return {'lineColor': AppColors.frozenWater, 'criticalLow': 70, 'criticalHigh': 180};
+      default:
+        return {'lineColor': AppColors.textSecondary, 'criticalLow': 0, 'criticalHigh': 100};
     }
-    return max + (max * 0.1);
+  }
+
+  Color _getStatusColorForValue(String chartType, double value) {
+    final config = _getVitalConfigForLegend(chartType);
+    if (value < config['criticalLow'] || value > config['criticalHigh']) {
+      return AppColors.riskHigh;
+    }
+    return AppColors.riskLow;
+  }
+
+  Widget _buildRiskDistribution() {
+    final lowRisk = _filteredData.where((d) => d.riskLevel == 0).length;
+    final moderateRisk = _filteredData.where((d) => d.riskLevel == 1).length;
+    final highRisk = _filteredData.where((d) => d.riskLevel == 2).length;
+    final total = lowRisk + moderateRisk + highRisk;
+
+    if (total == 0) {
+      return GlassCard(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Icon(
+              Icons.pie_chart_outline_rounded,
+              size: 48,
+              color: AppColors.textSecondary.withOpacity(0.3),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No Risk Data Available',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Risk Distribution',
+                style: AppTextStyles.heading3.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                'Total: $total',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Horizontal Bar Chart Style
+          _buildRiskBar(
+            label: 'Low Risk',
+            count: lowRisk,
+            total: total,
+            color: AppColors.riskLow,
+            icon: Icons.check_circle_rounded,
+          ),
+
+          const SizedBox(height: 12),
+
+          _buildRiskBar(
+            label: 'Moderate Risk',
+            count: moderateRisk,
+            total: total,
+            color: AppColors.riskModerate,
+            icon: Icons.warning_amber_rounded,
+          ),
+
+          const SizedBox(height: 12),
+
+          _buildRiskBar(
+            label: 'High Risk',
+            count: highRisk,
+            total: total,
+            color: AppColors.riskHigh,
+            icon: Icons.error_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRiskBar({
+    required String label,
+    required int count,
+    required int total,
+    required Color color,
+    required IconData icon,
+  }) {
+    final percentage = total > 0 ? (count / total) * 100 : 0.0;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 16,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Text(
+                  '${percentage.toStringAsFixed(1)}%',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  ' ($count)',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 8,
+          decoration: BoxDecoration(
+            color: AppColors.lightBackground,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: FractionallySizedBox(
+            widthFactor: percentage / 100,
+            alignment: Alignment.centerLeft,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color, color.withOpacity(0.7)],
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -307,29 +612,29 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                           children: [
                             Expanded(
                               child: GlassButton(
-                                onPressed: () => setState(() => _selectedTab = 0),
+                                onPressed: () => setState(() => _viewMode = 0),
                                 text: 'List View',
                                 type: ButtonType.primary,
-                                isSelected: _selectedTab == 0,
+                                isSelected: _viewMode == 0,
                                 height: 36,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: GlassButton(
-                                onPressed: () => setState(() => _selectedTab = 1),
+                                onPressed: () => setState(() => _viewMode = 1),
                                 text: 'Charts',
                                 type: ButtonType.primary,
-                                isSelected: _selectedTab == 1,
+                                isSelected: _viewMode == 1,
                                 height: 36,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      
+
                       const SizedBox(height: 12),
-                      
+
                       // Timeframe Filter
                       GlassCard(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -363,9 +668,9 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                           ),
                         ),
                       ),
-                      
+
                       const SizedBox(height: 12),
-                      
+
                       // Risk Level Filter Chips
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -384,7 +689,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                     ],
                   ),
                 ),
-                
+
                 // Stats Summary
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -412,12 +717,12 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 16),
-                
-                // Content based on selected tab
+
+                // Content based on selected view mode
                 Expanded(
-                  child: _selectedTab == 0
+                  child: _viewMode == 0
                       ? _buildListView()
                       : _buildChartView(),
                 ),
@@ -444,37 +749,11 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _buildChartSection(),
-        
+
         const SizedBox(height: 24),
-        
-        // Risk Distribution Pie Chart
-        if (_filteredData.isNotEmpty)
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Text(
-                  'Risk Distribution',
-                  style: AppTextStyles.heading3.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                Container(
-                  height: 200,
-                  child: PieChart(
-                    ChartUtils.createRiskDistribution(
-                      lowRisk: _filteredData.where((d) => d.riskLevel == 0).length,
-                      moderateRisk: _filteredData.where((d) => d.riskLevel == 1).length,
-                      highRisk: _filteredData.where((d) => d.riskLevel == 2).length,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+
+        // Risk Distribution
+        if (_filteredData.isNotEmpty) _buildRiskDistribution(),
       ],
     );
   }
@@ -482,7 +761,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   Widget _buildFilterChip(String label, Color color) {
     final isSelected = _selectedFilter == label;
     final buttonType = isSelected ? ButtonType.primary : ButtonType.secondary;
-    
+
     return GlassButton(
       onPressed: () => setState(() => _selectedFilter = label),
       text: label,
@@ -565,7 +844,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     final style = _getRiskStyle(data.riskLevel);
     final dateFormat = DateFormat('MMM dd, yyyy');
     final timeFormat = DateFormat('hh:mm a');
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: GlassCard(
@@ -596,7 +875,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                     ),
                   ],
                 ),
-                
+
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -627,9 +906,9 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Vitals Grid
             GridView.count(
               shrinkWrap: true,
@@ -669,7 +948,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 ),
               ],
             ),
-            
+
             // ML Confidence
             if (data.mlOutputProbabilities != null) ...[
               const SizedBox(height: 12),
@@ -677,7 +956,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
               const SizedBox(height: 12),
               _buildMLConfidence(data),
             ],
-            
+
             // Notes
             if (data.additionalNotes != null && data.additionalNotes!.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -750,8 +1029,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                   TextSpan(
                     text: value,
                     style: const TextStyle(
-                      fontSize: 14, 
-                      fontWeight: FontWeight.bold, 
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary
                     ),
                   ),
@@ -770,7 +1049,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
 
   Widget _buildMLConfidence(HealthDataModel data) {
     final probabilities = data.mlOutputProbabilities!;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -781,9 +1060,9 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         Row(
           children: [
             Expanded(

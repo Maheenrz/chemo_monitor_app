@@ -1,10 +1,11 @@
-// lib/screens/patient/vitals_entry_screen.dart (FIXED VERSION)
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
 import 'package:chemo_monitor_app/services/health_data_service.dart';
+import 'package:chemo_monitor_app/services/vitals_validator.dart';
 import 'package:chemo_monitor_app/widgets/common/glass_card.dart';
 import 'package:chemo_monitor_app/widgets/common/glass_button.dart';
+import 'package:chemo_monitor_app/screens/patient/vitals_result_screen.dart';
 
 class VitalsEntryScreen extends StatefulWidget {
   const VitalsEntryScreen({super.key});
@@ -37,6 +38,15 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     'Review'
   ];
 
+  // Validation state
+  final Map<String, bool> _fieldValid = {
+    'heartRate': false,
+    'spo2': false,
+    'systolicBP': false,
+    'diastolicBP': false,
+    'temperature': false,
+  };
+
   // Animation
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -66,6 +76,17 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     );
 
     _animationController.forward();
+    
+    // Initialize ML model
+    _initializeML();
+  }
+
+  Future<void> _initializeML() async {
+    try {
+      await _healthDataService.initializeMLModel();
+    } catch (e) {
+      print('⚠️ ML initialization warning: $e');
+    }
   }
 
   @override
@@ -102,53 +123,114 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   }
 
   Future<void> _submitVitals() async {
+    // 1. Validate all fields are filled
     if (!_validateForm()) {
       _showSnackBar('Please fill all required fields', AppColors.riskModerate);
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    // 2. Parse values
+    final heartRate = int.tryParse(_heartRateController.text);
+    final spo2 = int.tryParse(_spo2Controller.text);
+    final systolicBP = int.tryParse(_systolicBPController.text);
+    final diastolicBP = int.tryParse(_diastolicBPController.text);
+    final temperature = double.tryParse(_temperatureController.text);
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('Not logged in');
+    if (heartRate == null || spo2 == null || systolicBP == null || 
+        diastolicBP == null || temperature == null) {
+      _showSnackBar('Please enter valid numbers', AppColors.riskModerate);
+      return;
+    }
 
-      // ✅ PROPERLY SUBMIT TO HEALTH DATA SERVICE (which has ML integrated!)
-      final healthDataId = await _healthDataService.addHealthData(
-        patientId: user.uid,
-        heartRate: int.parse(_heartRateController.text),
-        spo2Level: int.parse(_spo2Controller.text),
-        systolicBP: int.parse(_systolicBPController.text),
-        diastolicBP: int.parse(_diastolicBPController.text),
-        temperature: double.parse(_temperatureController.text),
-        additionalNotes:
-            _notesController.text.isEmpty ? null : _notesController.text,
+    // 3. Run advanced validation
+    final validation = VitalsValidator.validate(
+      heartRate: heartRate,
+      spo2: spo2,
+      systolicBP: systolicBP,
+      diastolicBP: diastolicBP,
+      temperature: temperature,
+    );
+
+    if (!validation.isValid) {
+      _showValidationDialog(validation);
+      return;
+    }
+
+    // 4. Check for emergency values
+    if (VitalsValidator.isInEmergencyRange(
+      heartRate: heartRate,
+      spo2: spo2,
+      systolicBP: systolicBP,
+      diastolicBP: diastolicBP,
+      temperature: temperature,
+    )) {
+      _showEmergencyAlert(heartRate, spo2, systolicBP, diastolicBP, temperature);
+      return;
+    }
+
+    // 5. Show warnings if any
+    if (validation.hasWarnings || validation.hasAlerts) {
+      await _showWarningDialog(validation);
+    }
+
+    // 6. Proceed with submission
+    _proceedWithSubmission(
+      heartRate, spo2, systolicBP, diastolicBP, temperature
+    );
+  }
+
+  void _proceedWithSubmission(
+  int heartRate, 
+  int spo2, 
+  int systolicBP, 
+  int diastolicBP, 
+  double temperature
+) async {
+  setState(() => _isSubmitting = true);
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not logged in');
+
+    // Submit to health data service (includes ML)
+    final healthDataId = await _healthDataService.addHealthData(
+      patientId: user.uid,
+      heartRate: heartRate,
+      spo2Level: spo2,
+      systolicBP: systolicBP,
+      diastolicBP: diastolicBP,
+      temperature: temperature,
+      additionalNotes:
+          _notesController.text.isEmpty ? null : _notesController.text,
+    );
+
+    print('✅ Health data submitted successfully: $healthDataId');
+
+    // Get the newly created health data
+    final latestData = await _healthDataService.getLatestHealthData(user.uid);
+    
+    if (latestData != null && mounted) {
+      // Navigate to results screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VitalsResultScreen(healthData: latestData),
+        ),
       );
-
-      print('✅ Health data submitted successfully: $healthDataId');
-
+    } else {
       if (mounted) {
-        _showSnackBar('Vitals submitted successfully! ML prediction complete.',
-            AppColors.softGreen);
-
-        // Wait a moment then return to home
-        await Future.delayed(Duration(seconds: 2));
-
-        if (mounted) {
-          Navigator.pop(context, true); // Return true to reload home screen
-        }
-      }
-    } catch (e) {
-      print('❌ Error submitting vitals: $e');
-      if (mounted) {
-        _showSnackBar('Error: ${e.toString()}', AppColors.riskHigh);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
+        _showSnackBar('Vitals submitted! Analysis complete.', AppColors.softGreen);
+        Navigator.pop(context, true);
       }
     }
+  } catch (e) {
+    print('❌ Error submitting vitals: $e');
+    if (mounted) {
+      _showSnackBar('Error: ${e.toString()}', AppColors.riskHigh);
+      setState(() => _isSubmitting = false);
+    }
   }
+}
 
   bool _validateForm() {
     return _heartRateController.text.isNotEmpty &&
@@ -156,6 +238,140 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
         _systolicBPController.text.isNotEmpty &&
         _diastolicBPController.text.isNotEmpty &&
         _temperatureController.text.isNotEmpty;
+  }
+
+  void _showValidationDialog(ValidationResult validation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('❌ Validation Errors'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Please correct the following:'),
+            SizedBox(height: 10),
+            ...validation.errors.map((error) => 
+              Text('• $error', style: TextStyle(color: AppColors.riskHigh))
+            ).toList(),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEmergencyAlert(
+    int heartRate, int spo2, int systolicBP, int diastolicBP, double temperature
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 10),
+            Text('🚨 EMERGENCY ALERT'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('CRITICAL VITAL SIGNS DETECTED:', 
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 15),
+              if (spo2 < 90) Text('• Oxygen critically low: $spo2%'),
+              if (heartRate > 150) Text('• Heart rate dangerously high: $heartRate bpm'),
+              if (heartRate < 40) Text('• Heart rate dangerously low: $heartRate bpm'),
+              if (temperature > 39.0) Text('• High fever: ${temperature.toStringAsFixed(1)}°C'),
+              if (temperature < 35.5) Text('• Dangerously low temperature: ${temperature.toStringAsFixed(1)}°C'),
+              if (systolicBP > 180) Text('• Severely high blood pressure: $systolicBP mmHg'),
+              if (diastolicBP > 120) Text('• Severely high diastolic pressure: $diastolicBP mmHg'),
+              SizedBox(height: 15),
+              Text('RECOMMENDED ACTION:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 10),
+              Text('1. Contact your oncology team IMMEDIATELY\n'
+                  '2. If unavailable, call emergency services\n'
+                  '3. Rest and avoid exertion\n'
+                  '4. Have someone stay with you'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('CANCEL'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('PROCEED ANYWAY'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _proceedWithSubmission(
+                heartRate, spo2, systolicBP, diastolicBP, temperature
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showWarningDialog(ValidationResult validation) async {
+    if (!validation.hasWarnings && !validation.hasAlerts) return;
+    
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(validation.hasAlerts ? '⚠️ Alerts' : 'ℹ️ Notices'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (validation.hasAlerts) ...[
+                Text('Medical alerts detected:'),
+                SizedBox(height: 10),
+                ...validation.alerts.map((alert) => 
+                  Text('• $alert', style: TextStyle(color: Colors.orange))
+                ).toList(),
+                SizedBox(height: 15),
+              ],
+              if (validation.hasWarnings) ...[
+                Text('Warning signs:'),
+                SizedBox(height: 10),
+                ...validation.warnings.map((warning) => 
+                  Text('• $warning', style: TextStyle(color: Colors.blue))
+                ).toList(),
+              ],
+              SizedBox(height: 15),
+              Text('Would you like to continue with submission?'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('EDIT VALUES'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('CONTINUE'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSnackBar(String message, Color color) {
@@ -252,12 +468,23 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             borderRadius: BorderRadius.circular(AppDimensions.radiusCircle),
           ),
           SizedBox(height: AppDimensions.spaceS),
-          Text(
-            _steps[_currentStep],
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _steps[_currentStep],
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${_currentStep + 1}/${_steps.length}',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -311,6 +538,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 SizedBox(height: AppDimensions.spaceXXXL),
 
                 _buildNumberInput(
+                  key: 'heartRate',
                   controller: _heartRateController,
                   label: 'Heart Rate (bpm)',
                   icon: Icons.favorite_border_rounded,
@@ -325,10 +553,11 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 _buildReferenceRanges(
                   title: 'Normal Range: 60-100 bpm',
                   items: [
-                    '40-59: Low',
+                    'Below 60: Bradycardia',
                     '60-100: Normal',
-                    '101-120: Elevated',
-                    '120+: High',
+                    '100-120: Tachycardia',
+                    'Above 120: High',
+                    'Above 150: Emergency',
                   ],
                 ),
               ],
@@ -380,6 +609,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 ),
                 SizedBox(height: AppDimensions.spaceXXXL),
                 _buildNumberInput(
+                  key: 'spo2',
                   controller: _spo2Controller,
                   label: 'SpO2 Level (%)',
                   icon: Icons.air_outlined,
@@ -392,9 +622,9 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   title: 'Oxygen Levels:',
                   items: [
                     '95-100%: Normal',
-                    '90-94%: Mild Hypoxia',
-                    '85-89%: Moderate Hypoxia',
-                    'Below 85%: Severe Hypoxia',
+                    '94%: Low',
+                    '90-93%: Very Low',
+                    'Below 90%: Emergency',
                   ],
                 ),
               ],
@@ -449,25 +679,27 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   children: [
                     Expanded(
                       child: _buildNumberInput(
+                        key: 'systolicBP',
                         controller: _systolicBPController,
                         label: 'Systolic',
                         icon: Icons.arrow_upward_rounded,
                         min: 70,
-                        max: 200,
+                        max: 250,
                         unit: 'mmHg',
-                        centered: false, // ✅ Add this parameter
+                        centered: false,
                       ),
                     ),
                     SizedBox(width: AppDimensions.spaceL),
                     Expanded(
                       child: _buildNumberInput(
+                        key: 'diastolicBP',
                         controller: _diastolicBPController,
                         label: 'Diastolic',
                         icon: Icons.arrow_downward_rounded,
                         min: 40,
-                        max: 130,
+                        max: 150,
                         unit: 'mmHg',
-                        centered: false, // ✅ Add this parameter
+                        centered: false,
                       ),
                     ),
                   ],
@@ -480,6 +712,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                     'Elevated: 120-129/<80 mmHg',
                     'Stage 1: 130-139/80-89 mmHg',
                     'Stage 2: ≥140/≥90 mmHg',
+                    'Emergency: >180/>120 mmHg',
                   ],
                 ),
               ],
@@ -531,6 +764,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 ),
                 SizedBox(height: AppDimensions.spaceXXXL),
                 _buildNumberInput(
+                  key: 'temperature',
                   controller: _temperatureController,
                   label: 'Temperature (°C)',
                   icon: Icons.thermostat_outlined,
@@ -544,9 +778,10 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   title: 'Temperature Ranges:',
                   items: [
                     'Normal: 36.1-37.2°C',
-                    'Fever: 37.3-38.0°C',
-                    'High Fever: 38.1-40.0°C',
-                    'Hyperpyrexia: >40.0°C',
+                    'Elevated: 37.3-37.9°C',
+                    'Fever: 38.0-38.9°C',
+                    'High Fever: 39.0-40.0°C',
+                    'Emergency: >40.0°C',
                   ],
                 ),
               ],
@@ -608,14 +843,14 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   icon: Icons.favorite_rounded,
                   label: 'Heart Rate',
                   value: '${_heartRateController.text} bpm',
-                  color: AppColors.riskHigh,
+                  isValid: _fieldValid['heartRate'] ?? true,
                 ),
 
                 _buildVitalSummaryItem(
                   icon: Icons.air_rounded,
                   label: 'SpO2 Level',
                   value: '${_spo2Controller.text}%',
-                  color: AppColors.primaryBlue,
+                  isValid: _fieldValid['spo2'] ?? true,
                 ),
 
                 _buildVitalSummaryItem(
@@ -623,14 +858,15 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   label: 'Blood Pressure',
                   value:
                       '${_systolicBPController.text}/${_diastolicBPController.text} mmHg',
-                  color: AppColors.softPurple,
+                  isValid: (_fieldValid['systolicBP'] ?? true) && 
+                          (_fieldValid['diastolicBP'] ?? true),
                 ),
 
                 _buildVitalSummaryItem(
                   icon: Icons.thermostat_rounded,
                   label: 'Temperature',
                   value: '${_temperatureController.text}°C',
-                  color: AppColors.riskModerate,
+                  isValid: _fieldValid['temperature'] ?? true,
                 ),
 
                 SizedBox(height: AppDimensions.spaceXXXL),
@@ -665,6 +901,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   }
 
   Widget _buildNumberInput({
+    required String key,
     required TextEditingController controller,
     required String label,
     required IconData icon,
@@ -672,15 +909,18 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     required double max,
     required String unit,
     bool isDecimal = false,
-    bool centered = true, // ✅ New parameter with default true
+    bool centered = true,
   }) {
+    String? errorText;
+    bool isValid = _fieldValid[key] ?? true;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
+            color: isValid ? AppColors.textPrimary : AppColors.riskHigh,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -690,21 +930,40 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
             boxShadow: AppShadows.elevation1,
+            border: !isValid 
+              ? Border.all(color: AppColors.riskHigh, width: 2)
+              : null,
           ),
           child: TextFormField(
             controller: controller,
             keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
             style: AppTextStyles.heading3.copyWith(
-              color: AppColors.textPrimary,
+              color: isValid ? AppColors.textPrimary : AppColors.riskHigh,
             ),
-            textAlign: centered
-                ? TextAlign.center
-                : TextAlign.left, // ✅ Conditional alignment
+            textAlign: centered ? TextAlign.center : TextAlign.left,
+            onChanged: (value) {
+              if (value.isNotEmpty) {
+                final numValue = isDecimal ? double.tryParse(value) : int.tryParse(value);
+                if (numValue != null) {
+                  final newIsValid = numValue >= min && numValue <= max;
+                  setState(() {
+                    _fieldValid[key] = newIsValid;
+                  });
+                  
+                  if (!newIsValid) {
+                    errorText = 'Must be between $min and $max $unit';
+                  } else {
+                    errorText = null;
+                  }
+                }
+              }
+            },
             decoration: InputDecoration(
-              prefixIcon: Icon(icon, color: AppColors.primaryBlue),
+              prefixIcon: Icon(icon, 
+                  color: isValid ? AppColors.primaryBlue : AppColors.riskHigh),
               suffixText: unit,
               suffixStyle: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+                color: isValid ? AppColors.textSecondary : AppColors.riskHigh,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
@@ -716,7 +975,16 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 horizontal: AppDimensions.spaceL,
                 vertical: AppDimensions.spaceXL,
               ),
+              errorText: errorText,
+              errorStyle: AppTextStyles.caption.copyWith(color: AppColors.riskHigh),
             ),
+          ),
+        ),
+        SizedBox(height: AppDimensions.spaceS),
+        Text(
+          'Range: $min-$max $unit',
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
           ),
         ),
       ],
@@ -775,7 +1043,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     required IconData icon,
     required String label,
     required String value,
-    required Color color,
+    required bool isValid,
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: AppDimensions.spaceL),
@@ -784,18 +1052,23 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
         boxShadow: AppShadows.elevation1,
+        border: !isValid 
+          ? Border.all(color: AppColors.riskHigh, width: 2)
+          : null,
       ),
       child: Row(
         children: [
           Container(
             padding: EdgeInsets.all(AppDimensions.spaceM),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: isValid 
+                ? AppColors.primaryBlue.withOpacity(0.1)
+                : AppColors.riskHigh.withOpacity(0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
             ),
             child: Icon(
               icon,
-              color: color,
+              color: isValid ? AppColors.primaryBlue : AppColors.riskHigh,
               size: AppDimensions.iconM,
             ),
           ),
@@ -813,46 +1086,60 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                 Text(
                   value,
                   style: AppTextStyles.bodyLarge.copyWith(
-                    color: AppColors.textPrimary,
+                    color: isValid ? AppColors.textPrimary : AppColors.riskHigh,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
+          if (!isValid)
+            Icon(Icons.warning, color: AppColors.riskHigh),
         ],
       ),
     );
   }
 
   Widget _buildNavigationButtons() {
-    return Padding(
-      padding: EdgeInsets.all(AppDimensions.paddingMedium),
-      child: Row(
-        children: [
-          if (_currentStep > 0)
-            Expanded(
-              child: GlassButton(
-                text: 'Back',
-                type: ButtonType.secondary,
-                onPressed: _previousStep,
-              ),
-            ),
-          if (_currentStep > 0) SizedBox(width: AppDimensions.spaceL),
+  final bool allValid = _fieldValid.values.every((valid) => valid);
+  final bool isReviewStep = _currentStep == _steps.length - 1;
+  
+  return Padding(
+    padding: EdgeInsets.all(AppDimensions.paddingMedium),
+    child: Row(
+      children: [
+        if (_currentStep > 0)
           Expanded(
             child: GlassButton(
-              text: _currentStep == _steps.length - 1
-                  ? (_isSubmitting ? 'Analyzing...' : 'Submit & Analyze')
-                  : 'Next',
-              type: ButtonType.primary,
-              onPressed: _currentStep == _steps.length - 1
-                  ? (_isSubmitting ? null : _submitVitals)
-                  : _nextStep,
-              isLoading: _isSubmitting,
+              text: 'Back',
+              type: ButtonType.secondary,
+              onPressed: _previousStep,
             ),
           ),
-        ],
-      ),
-    );
-  }
+        if (_currentStep > 0) SizedBox(width: AppDimensions.spaceL),
+        Expanded(
+          child: GlassButton(
+            text: isReviewStep
+                ? (_isSubmitting ? 'Analyzing...' : 'Submit & Analyze')
+                : 'Next',
+            type: ButtonType.primary,
+            onPressed: () {
+              if (isReviewStep) {
+                if (_isSubmitting) return;
+                if (!allValid) {
+                  _showSnackBar('Please fix invalid values', AppColors.riskHigh);
+                  return;
+                }
+                _submitVitals();
+              } else {
+                _nextStep();
+              }
+            },
+            isLoading: _isSubmitting,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 }

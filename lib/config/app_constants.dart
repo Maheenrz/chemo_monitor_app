@@ -14,11 +14,11 @@ class AppInfo {
 
 class AppColors {
   // Your specified colors
-  static const Color wisteriaBlue = Color(0xFF809bce);      // Primary soft blue-violet
-  static const Color powderBlue = Color(0xFF95b8d1);        // Comforting blue
-  static const Color frozenWater = Color(0xFFb8e0d2);       // Turquoise shimmer
-  static const Color honeydew = Color(0xFFd6eadf);          // Pale green
-  static const Color pastelPetal = Color(0xFFeac4d5);       // Blush pink
+  static const Color wisteriaBlue = Color.fromARGB(255, 104, 145, 221);      // Primary soft blue-violet
+  static const Color powderBlue = Color.fromARGB(255, 102, 125, 142);        // Comforting blue
+  static const Color frozenWater = Color.fromARGB(255, 108, 138, 127);       // Turquoise shimmer
+  static const Color honeydew = Color.fromARGB(255, 143, 220, 178);          // Pale green
+  static const Color pastelPetal = Color.fromARGB(255, 225, 157, 188);       // Blush pink
   
   // For backwards compatibility/aliases
   static const Color primaryBlue = Color(0xFF809bce);      // Same as wisteriaBlue
@@ -26,11 +26,11 @@ class AppColors {
   static const Color softPurple = Color(0xFFeac4d5);       // Same as pastelPetal
   
   // Risk Level Colors using your palette
-  static const Color riskLow = Color(0xFFb8e0d2);          // Frozen Water
+  static const Color riskLow = Color.fromARGB(255, 125, 189, 167);          // Frozen Water
   static const Color riskLowBg = Color(0xFFE8F8F0);
-  static const Color riskModerate = Color(0xFFeac4d5);     // Pastel Petal
-  static const Color riskModerateBg = Color(0xFFFFF4EC);
-  static const Color riskHigh = Color(0xFFf4b4c4);         // Slightly deeper petal
+  static const Color riskModerate = Color.fromARGB(255, 235, 154, 191);     // Pastel Petal
+  static const Color riskModerateBg = Color.fromARGB(255, 244, 219, 200);
+  static const Color riskHigh = Color.fromARGB(255, 243, 144, 169);         // Slightly deeper petal
   static const Color riskHighBg = Color(0xFFFFEEF1);
   
   // Background & Text
@@ -56,10 +56,10 @@ class AppColors {
   static const Color divider = Color(0xFFE8EAF6);
   
   // Message Status Colors
-  static const Color messagePending = Color(0xFFeac4d5);    // Pink for pending
-  static const Color messageSent = Color(0xFF95b8d1);       // Powder blue for sent
-  static const Color messageDelivered = Color(0xFF809bce);  // Wisteria blue for delivered
-  static const Color messageRead = Color(0xFFb8e0d2);       // Frozen water for read
+  static const Color messagePending = Color.fromARGB(255, 254, 167, 206);    // Pink for pending
+  static const Color messageSent = Color.fromARGB(255, 255, 255, 255);       // Powder blue for sent
+  static const Color messageDelivered = Color.fromARGB(255, 28, 104, 245);  // Wisteria blue for delivered
+  static const Color messageRead = Color.fromARGB(255, 10, 152, 103);       // Frozen water for read
 }
 
 // ===================================================

@@ -2,14 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chemo_monitor_app/services/ml_prediction_service.dart';
-import 'package:chemo_monitor_app/services/notification_service.dart'; // 🔔 NEW
 import 'package:chemo_monitor_app/services/notification_service.dart';
 
 class HealthDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String healthDataCollection = 'health_data';
   final MLPredictionService _mlService = MLPredictionService();
-  final NotificationService _notificationService = NotificationService(); // 🔔 NEW
+  final NotificationService _notificationService = NotificationService();
 
   // Initialize ML model
   Future<void> initializeMLModel() async {
@@ -18,6 +17,53 @@ class HealthDataService {
       print('✅ ML model initialized in HealthDataService');
     } catch (e) {
       print('⚠️ ML model failed to load: $e');
+    }
+  }
+
+  /// 🚨 Handle risk-based notifications with improved logic
+  Future<void> _handleRiskNotifications(String patientId, HealthDataModel healthData) async {
+    try {
+      // Get patient info
+      final patientDoc = await _firestore.collection('users').doc(patientId).get();
+      if (!patientDoc.exists) return;
+
+      final patientData = patientDoc.data()!;
+      final String? doctorId = patientData['assignedDoctorId'];
+      final String patientName = patientData['name'] ?? 'Patient';
+
+      if (doctorId == null) {
+        print('⚠️ No doctor assigned to this patient');
+        return;
+      }
+
+      // Send notification based on risk level
+      if (healthData.riskLevel == 2) {
+        // HIGH RISK - Critical Alert
+        print('🚨 HIGH RISK DETECTED - Sending alert to doctor');
+        
+        await _notificationService.sendHighRiskAlert(
+          doctorId: doctorId,
+          patientId: patientId,
+          patientName: patientName,
+          healthData: healthData,
+        );
+        
+      } else if (healthData.riskLevel == 1) {
+        // MODERATE RISK - Warning notification
+        print('⚠️ MODERATE RISK DETECTED - Sending notification to doctor');
+        
+        await _notificationService.sendModerateRiskNotification(
+          doctorId: doctorId,
+          patientId: patientId,
+          patientName: patientName,
+          healthData: healthData,
+        );
+        
+      } else {
+        print('✅ LOW RISK - No notification needed');
+      }
+    } catch (e) {
+      print('❌ Error handling risk notifications: $e');
     }
   }
 
@@ -54,9 +100,15 @@ class HealthDataService {
 
       try {
         print('🤖 Running ML prediction...');
-        final prediction = await _mlService.predict(mlInput);
-        riskLevel = prediction['riskLevel'];
-        mlProbabilities = prediction['probabilities'];
+        final prediction = await _mlService.predict(
+          heartRate: heartRate,
+          spo2: spo2Level,
+          systolicBP: systolicBP,
+          diastolicBP: diastolicBP,
+          temperature: temperature,
+        );
+        riskLevel = prediction['riskLevel'] as int;
+        mlProbabilities = prediction['probabilities'] as List<double>?;
         print('✅ ML prediction successful: Risk Level $riskLevel');
       } catch (e) {
         print('⚠️ ML prediction failed, using rule-based fallback: $e');
@@ -97,49 +149,6 @@ class HealthDataService {
       return id;
     } catch (e) {
       throw Exception('Failed to save health data: $e');
-    }
-  }
-
-  /// 🚨 Handle risk-based notifications
-  Future<void> _handleRiskNotifications(String patientId, HealthDataModel healthData) async {
-    try {
-      // Get patient info
-      final patientDoc = await _firestore.collection('users').doc(patientId).get();
-      if (!patientDoc.exists) return;
-
-      final patientData = patientDoc.data()!;
-      final String? doctorId = patientData['assignedDoctorId'];
-      final String patientName = patientData['name'] ?? 'Patient';
-
-      if (doctorId == null) {
-        print('⚠️ No doctor assigned to this patient');
-        return;
-      }
-
-      // Send notification based on risk level
-      if (healthData.riskLevel == 2) {
-        // HIGH RISK - Critical Alert
-        print('🚨 HIGH RISK DETECTED - Sending alert to doctor');
-        await _notificationService.sendHighRiskAlert(
-          doctorId: doctorId,
-          patientId: patientId,
-          patientName: patientName,
-          healthData: healthData,
-        );
-      } else if (healthData.riskLevel == 1) {
-        // MODERATE RISK - Warning notification
-        print('⚠️ MODERATE RISK DETECTED - Sending notification to doctor');
-        await _notificationService.sendModerateRiskNotification(
-          doctorId: doctorId,
-          patientId: patientId,
-          patientName: patientName,
-          healthData: healthData,
-        );
-      } else {
-        print('✅ LOW RISK - No notification needed');
-      }
-    } catch (e) {
-      print('❌ Error handling risk notifications: $e');
     }
   }
 

@@ -9,6 +9,7 @@ class GlassButton extends StatefulWidget {
   final ButtonType type;
   final bool isLoading;
   final bool isSelected;
+  final bool isDisabled; // NEW: Add this parameter
   final double borderRadius;
   final double height;
   final EdgeInsetsGeometry padding;
@@ -22,6 +23,7 @@ class GlassButton extends StatefulWidget {
     this.type = ButtonType.primary,
     this.isLoading = false,
     this.isSelected = false,
+    this.isDisabled = false, // DEFAULT VALUE
     this.borderRadius = AppDimensions.radiusLarge,
     this.height = 36.0,
     this.padding = const EdgeInsets.symmetric(
@@ -68,6 +70,10 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
   }
 
   Color _getBackgroundColor() {
+    if (widget.isDisabled) {
+      return Colors.grey.withOpacity(0.3);
+    }
+    
     if (widget.isSelected && widget.type == ButtonType.primary) {
       return AppColors.primaryBlue;
     }
@@ -87,6 +93,10 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
   }
 
   Color _getTextColor() {
+    if (widget.isDisabled) {
+      return Colors.grey;
+    }
+    
     if (widget.isSelected && widget.type == ButtonType.primary) {
       return Colors.white;
     }
@@ -102,6 +112,10 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
   }
 
   List<BoxShadow> _getShadows() {
+    if (widget.isDisabled) {
+      return [];
+    }
+    
     if (widget.type == ButtonType.secondary || widget.type == ButtonType.primary) {
       return [
         BoxShadow(
@@ -123,72 +137,75 @@ class _GlassButtonState extends State<GlassButton> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _animationController.forward(),
-      onTapUp: (_) => _animationController.reverse(),
-      onTapCancel: () => _animationController.reverse(),
-      onTap: widget.isLoading ? null : widget.onPressed,
+      onTapDown: widget.isDisabled ? null : (_) => _animationController.forward(),
+      onTapUp: widget.isDisabled ? null : (_) => _animationController.reverse(),
+      onTapCancel: widget.isDisabled ? null : () => _animationController.reverse(),
+      onTap: widget.isDisabled || widget.isLoading ? null : widget.onPressed,
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: Container(
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: _getBackgroundColor(),
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            border: widget.type == ButtonType.secondary || 
-                   (widget.type == ButtonType.primary && !widget.isSelected)
-                ? Border.all(color: AppColors.primaryBlue.withOpacity(0.3), width: 1)
-                : null,
-            boxShadow: _getShadows(),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            child: InkWell(
+        child: Opacity(
+          opacity: widget.isDisabled ? 0.5 : 1.0,
+          child: Container(
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: _getBackgroundColor(),
               borderRadius: BorderRadius.circular(widget.borderRadius),
-              onTap: widget.isLoading ? null : widget.onPressed,
-              child: Padding(
-                padding: widget.padding,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Button Content
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 150),
-                      opacity: widget.isLoading ? 0.0 : 1.0,
-                      child: widget.child ?? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (widget.icon != null) ...[
-                            Icon(
-                              widget.icon,
-                              color: _getTextColor(),
-                              size: 16,
+              border: widget.type == ButtonType.secondary || 
+                     (widget.type == ButtonType.primary && !widget.isSelected)
+                  ? Border.all(color: AppColors.primaryBlue.withOpacity(0.3), width: 1)
+                  : null,
+              boxShadow: _getShadows(),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                onTap: widget.isDisabled || widget.isLoading ? null : widget.onPressed,
+                child: Padding(
+                  padding: widget.padding,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Button Content
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        opacity: widget.isLoading ? 0.0 : 1.0,
+                        child: widget.child ?? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (widget.icon != null) ...[
+                              Icon(
+                                widget.icon,
+                                color: _getTextColor(),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              widget.text!,
+                              style: TextStyle(
+                                color: _getTextColor(),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
-                            const SizedBox(width: 6),
                           ],
-                          Text(
-                            widget.text!,
-                            style: TextStyle(
-                              color: _getTextColor(),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // Loading Indicator
-                    if (widget.isLoading)
-                      SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(_getTextColor()),
                         ),
                       ),
-                  ],
+                      
+                      // Loading Indicator
+                      if (widget.isLoading)
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(_getTextColor()),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
