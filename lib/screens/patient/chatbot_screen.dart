@@ -5,9 +5,6 @@ import 'package:chemo_monitor_app/services/chatbot_service.dart';
 import 'package:chemo_monitor_app/services/health_data_service.dart';
 import 'package:chemo_monitor_app/models/health_data_model.dart';
 import 'package:intl/intl.dart';
-import 'package:chemo_monitor_app/widgets/common/markdown_text_widget.dart';
-import 'package:chemo_monitor_app/widgets/common/glass_card.dart';
-import 'package:chemo_monitor_app/widgets/common/glass_button.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -21,6 +18,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final HealthDataService _healthDataService = HealthDataService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
   
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -31,6 +29,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     super.initState();
     _loadLatestHealthData();
     _addWelcomeMessage();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLatestHealthData() async {
@@ -46,14 +52,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void _addWelcomeMessage() {
     setState(() {
       _messages.add(ChatMessage(
-        text: '''Hello! I'm your AI health assistant. 🤖
-
-I can help you with:
-- Understanding your vitals
-- Managing side effects
-- General health guidance
-
-How can I assist you today?''',
+        text: 'Hello! I am your AI health assistant.\n\nI can help you with:\n• Understanding your vital signs\n• Managing side effects\n• General health guidance\n• When to contact your doctor\n\nHow can I assist you today?',
         isUser: false,
         timestamp: DateTime.now(),
       ));
@@ -70,17 +69,15 @@ How can I assist you today?''',
     final riskLevel = data.getRiskLevelString();
     final timestamp = DateFormat('MMM dd, hh:mm a').format(data.timestamp);
     
-    final summary = '''
-📊 **Latest Health Summary** ($timestamp)
+    final summary = '''Latest Health Summary ($timestamp)
 
-**Risk Level:** ${riskLevel.toUpperCase()}
-**Heart Rate:** ${data.heartRate} bpm
-**SpO₂ Level:** ${data.spo2Level}%
-**Temperature:** ${data.temperature.toStringAsFixed(1)}°C
-**Blood Pressure:** ${data.systolicBP}/${data.diastolicBP} mmHg
+Risk Level: ${riskLevel.toUpperCase()}
+Heart Rate: ${data.heartRate} bpm
+SpO2 Level: ${data.spo2Level}%
+Temperature: ${data.temperature.toStringAsFixed(1)}°C
+Blood Pressure: ${data.systolicBP}/${data.diastolicBP} mmHg
 
-${_getRiskAdvice(data.riskLevel)}
-''';
+${_getRiskAdvice(data.riskLevel)}''';
     
     _addSystemMessage(summary);
   }
@@ -88,13 +85,13 @@ ${_getRiskAdvice(data.riskLevel)}
   String _getRiskAdvice(int? riskLevel) {
     switch (riskLevel) {
       case 0:
-        return '✅ You are in the normal range. Continue with your regular monitoring schedule.';
+        return 'You are in the normal range. Continue with your regular monitoring schedule.';
       case 1:
-        return '⚠️ Moderate risk detected. Please rest and monitor your symptoms. Contact your doctor if symptoms persist.';
+        return 'Moderate risk detected. Please rest and monitor your symptoms. Contact your doctor if symptoms persist.';
       case 2:
-        return '🚨 High risk detected. Please seek immediate medical attention.';
+        return 'High risk detected. Please seek immediate medical attention.';
       default:
-        return '📋 Please consult with your healthcare provider for personalized advice.';
+        return 'Please consult with your healthcare provider for personalized advice.';
     }
   }
 
@@ -179,14 +176,22 @@ ${_getRiskAdvice(data.riskLevel)}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.mainBackground,
+      backgroundColor: AppColors.lightBackground,
       appBar: AppBar(
         title: Row(
           children: [
-            GlassCard(
-              padding: const EdgeInsets.all(4),
-              blurSigma: 5,
-              child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 24),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.wisteriaBlue,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.smart_toy_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Text(
@@ -197,35 +202,55 @@ ${_getRiskAdvice(data.riskLevel)}
             ),
           ],
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primaryBlue),
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.lightBlue,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.wisteriaBlue,
+              size: 20,
+            ),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Column(
         children: [
-          // Warning Banner (Glassmorphism style)
-          Padding(
+          // Warning Banner
+          Container(
+            margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
-            child: GlassCard(
-              padding: const EdgeInsets.all(16),
-              color: Colors.orange.withOpacity(0.1),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, size: 20, color: Colors.orange),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'AI assistant for guidance only. Always consult your doctor for medical decisions.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.orange.shade800,
-                      ),
+            decoration: BoxDecoration(
+              color: AppColors.riskModerateBg,
+              borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+              border: Border.all(
+                color: AppColors.riskModerate.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 20,
+                  color: AppColors.riskModerate,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'AI assistant for guidance only. Always consult your doctor for medical decisions.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
@@ -236,49 +261,31 @@ ${_getRiskAdvice(data.riskLevel)}
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  GlassButton(
+                  _buildQuickActionButton(
+                    icon: Icons.health_and_safety_rounded,
+                    label: 'Health Summary',
                     onPressed: _showHealthSummary,
-                    child: const Row(
-                      children: [
-                        Icon(Icons.health_and_safety_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Health Summary'),
-                      ],
-                    ),
-                    type: ButtonType.secondary,
-                    height: 36,
+                    color: AppColors.wisteriaBlue,
                   ),
                   const SizedBox(width: 8),
-                  GlassButton(
+                  _buildQuickActionButton(
+                    icon: Icons.medical_services_rounded,
+                    label: 'Side Effects',
                     onPressed: () {
                       _messageController.text = 'What should I do about side effects?';
                       _sendMessage();
                     },
-                    child: const Row(
-                      children: [
-                        Icon(Icons.medical_services_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('Side Effects'),
-                      ],
-                    ),
-                    type: ButtonType.secondary,
-                    height: 36,
+                    color: AppColors.frozenWater,
                   ),
                   const SizedBox(width: 8),
-                  GlassButton(
+                  _buildQuickActionButton(
+                    icon: Icons.contact_support_rounded,
+                    label: 'When to Call',
                     onPressed: () {
                       _messageController.text = 'When should I contact my doctor?';
                       _sendMessage();
                     },
-                    child: const Row(
-                      children: [
-                        Icon(Icons.contact_support_rounded, size: 16),
-                        SizedBox(width: 6),
-                        Text('When to Call'),
-                      ],
-                    ),
-                    type: ButtonType.secondary,
-                    height: 36,
+                    color: AppColors.pastelPetal,
                   ),
                 ],
               ),
@@ -305,10 +312,18 @@ ${_getRiskAdvice(data.riskLevel)}
               padding: const EdgeInsets.only(left: 16, bottom: 10),
               child: Row(
                 children: [
-                  GlassCard(
-                    padding: const EdgeInsets.all(6),
-                    blurSigma: 5,
-                    child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 20),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.wisteriaBlue,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.smart_toy_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -327,29 +342,30 @@ ${_getRiskAdvice(data.riskLevel)}
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 15,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              boxShadow: AppShadows.elevation1,
             ),
             child: SafeArea(
               child: Row(
                 children: [
                   Expanded(
-                    child: GlassCard(
-                      padding: EdgeInsets.zero,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.lightBackground,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       child: TextField(
                         controller: _messageController,
-                        decoration: const InputDecoration(
+                        focusNode: _focusNode,
+                        decoration: InputDecoration(
                           hintText: 'Ask about your health...',
-                          hintStyle: TextStyle(color: AppColors.textSecondary),
+                          hintStyle: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 15,
+                          ),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
-                            vertical: 16,
+                            vertical: 14,
                           ),
                         ),
                         maxLines: null,
@@ -359,11 +375,31 @@ ${_getRiskAdvice(data.riskLevel)}
                     ),
                   ),
                   const SizedBox(width: 12),
-                  GlassButton(
-                    onPressed: _isLoading ? null : _sendMessage,
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                    type: ButtonType.primary,
+                  Container(
+                    width: 48,
                     height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.wisteriaBlue,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: AppShadows.buttonShadow,
+                    ),
+                    child: IconButton(
+                      onPressed: _isLoading ? null : _sendMessage,
+                      icon: _isLoading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -374,11 +410,43 @@ ${_getRiskAdvice(data.riskLevel)}
     );
   }
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required Color color,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: color,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -411,10 +479,18 @@ class _ChatBubble extends StatelessWidget {
         children: [
           // AI Icon (Left Side)
           if (!message.isUser) ...[
-            GlassCard(
-              padding: const EdgeInsets.all(6),
-              blurSigma: 5,
-              child: Icon(Icons.smart_toy_rounded, color: AppColors.primaryBlue, size: 20),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.wisteriaBlue,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.smart_toy_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 8),
           ],
@@ -423,25 +499,38 @@ class _ChatBubble extends StatelessWidget {
           Flexible(
             child: Container(
               constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-              child: GlassCard(
+              child: Container(
                 padding: const EdgeInsets.all(16),
-                margin: message.isUser ? const EdgeInsets.only(left: 40) : const EdgeInsets.only(right: 40),
-                color: message.isUser ? AppColors.primaryBlue.withOpacity(0.8) : Colors.white,
+                margin: message.isUser 
+                    ? const EdgeInsets.only(left: 40) 
+                    : const EdgeInsets.only(right: 40),
+                decoration: BoxDecoration(
+                  color: message.isUser ? AppColors.wisteriaBlue : Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(20),
+                    topRight: const Radius.circular(20),
+                    bottomLeft: message.isUser 
+                        ? const Radius.circular(20) 
+                        : const Radius.circular(4),
+                    bottomRight: message.isUser 
+                        ? const Radius.circular(4) 
+                        : const Radius.circular(20),
+                  ),
+                  boxShadow: AppShadows.elevation1,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!message.isUser)
-                      MarkdownTextWidget(
-                        text: message.text,
-                        textColor: AppColors.textPrimary,
-                      )
-                    else
-                      Text(
-                        message.text,
-                        style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+                    // Message Text
+                    SelectableText(
+                      message.text,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: message.isUser ? Colors.white : AppColors.textPrimary,
+                        height: 1.5,
                       ),
+                    ),
                     
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     
                     // Timestamp
                     Align(
@@ -463,10 +552,18 @@ class _ChatBubble extends StatelessWidget {
           // User Icon (Right Side)
           if (message.isUser) ...[
             const SizedBox(width: 8),
-            GlassCard(
-              padding: const EdgeInsets.all(6),
-              blurSigma: 5,
-              child: Icon(Icons.person_rounded, color: AppColors.softPurple, size: 20),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.pastelPetal,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.person_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ],
         ],

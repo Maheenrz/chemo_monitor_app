@@ -168,102 +168,101 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   }
 
   Widget _buildChartSection() {
-    final chartTypes = ['Heart Rate', 'SpO2', 'Temperature', 'Blood Pressure'];
-    final selectedChartType = chartTypes[_selectedChartType];
-    final selectedSpots = _getChartData(selectedChartType);
-    final timestamps = _getTimestampsForSelectedChart();
+  final chartTypes = ['Heart Rate', 'SpO2', 'Temperature', 'Blood Pressure'];
+  final selectedChartType = chartTypes[_selectedChartType];
+  final selectedSpots = _getChartData(selectedChartType);
+  // Remove this line: final timestamps = _getTimestampsForSelectedChart();
 
-    if (selectedSpots.isEmpty) {
-      return _buildNoDataChart(selectedChartType);
-    }
-
-    return Column(
-      children: [
-        // Chart Type Selector (Moved to top)
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: chartTypes.asMap().entries.map((entry) {
-              final index = entry.key;
-              final type = entry.value;
-              final isSelected = _selectedChartType == index;
-
-              return Container(
-                margin: const EdgeInsets.only(right: 8),
-                child: GlassButton(
-                  onPressed: () {
-                    setState(() => _selectedChartType = index);
-                  },
-                  text: type,
-                  type: ButtonType.primary,
-                  isSelected: isSelected,
-                  height: 40,
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Chart title with statistics
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    selectedChartType,
-                    style: AppTextStyles.heading3.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${selectedSpots.length} readings • $_selectedTimeframe',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-              _buildChartStats(selectedSpots, selectedChartType),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // The chart itself
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 280,
-                child: LineChart(
-                  ChartUtils.createHealthChart(
-                    spots: selectedSpots,
-                    chartType: selectedChartType,
-                    timestamps: timestamps,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Legend
-              _buildChartLegend(selectedChartType),
-            ],
-          ),
-        ),
-      ],
-    );
+  if (selectedSpots.isEmpty) {
+    return _buildNoDataChart(selectedChartType);
   }
 
+  return Column(
+    children: [
+      // Chart Type Selector (Moved to top)
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: chartTypes.asMap().entries.map((entry) {
+            final index = entry.key;
+            final type = entry.value;
+            final isSelected = _selectedChartType == index;
+
+            return Container(
+              margin: const EdgeInsets.only(right: 8),
+              child: GlassButton(
+                onPressed: () {
+                  setState(() => _selectedChartType = index);
+                },
+                text: type,
+                type: ButtonType.primary,
+                isSelected: isSelected,
+                height: 40,
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+
+      const SizedBox(height: 16),
+
+      // Chart title with statistics
+      GlassCard(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  selectedChartType,
+                  style: AppTextStyles.heading3.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${selectedSpots.length} readings • $_selectedTimeframe',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            _buildChartStats(selectedSpots, selectedChartType),
+          ],
+        ),
+      ),
+
+      const SizedBox(height: 16),
+
+      // The chart itself - FIX HERE:
+      GlassCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 280,
+              child: LineChart(
+                ChartUtils.createHealthChart(
+                  spots: selectedSpots,
+                  chartType: selectedChartType,
+                  // REMOVE timestamps parameter entirely
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Legend
+            _buildChartLegend(selectedChartType),
+          ],
+        ),
+      ),
+    ],
+  );
+}
   Widget _buildNoDataChart(String chartType) {
     return GlassCard(
       padding: const EdgeInsets.all(32),

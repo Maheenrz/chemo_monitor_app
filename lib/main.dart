@@ -13,8 +13,9 @@ import 'package:chemo_monitor_app/screens/patient/patient_home_screen.dart';
 import 'package:chemo_monitor_app/screens/doctor/analytics_screen.dart';
 import 'package:chemo_monitor_app/screens/doctor/notifications_screen.dart';
 import 'package:chemo_monitor_app/screens/shared/profile_edit_screen.dart';
-import 'package:chemo_monitor_app/screens/shared/settings_screen.dart';
+import 'package:chemo_monitor_app/screens/shared/settings_screen.dart' as settings;
 import 'firebase_options.dart';
+import 'dart:math';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,12 +25,27 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 2. Initialize DotEnv (Secrets)
+  // 2. Initialize DotEnv (Secrets) - WITH VALIDATION
   try {
     await dotenv.load(fileName: ".env");
-    print('✅ DotEnv loaded successfully');
+    print('✅ DotEnv file loaded successfully');
+    
+    // VALIDATE API KEY EXISTS
+    final mistralKey = dotenv.env['MISTRAL_API_KEY'];
+    if (mistralKey == null || mistralKey.isEmpty) {
+      print('❌ FATAL ERROR: MISTRAL_API_KEY not found in .env file!');
+      print('❌ Please add: MISTRAL_API_KEY=your_key_here to your .env file');
+    } else {
+      print('✅ MISTRAL_API_KEY loaded (${mistralKey.length} characters)');
+      print('✅ Key preview: ${mistralKey.substring(0, min(15, mistralKey.length))}...');
+    }
   } catch (e) {
-    print('⚠️ Failed to load .env file: $e');
+    print('❌ FATAL ERROR: Failed to load .env file!');
+    print('❌ Error: $e');
+    print('❌ Make sure:');
+    print('   1. .env file exists in project root');
+    print('   2. pubspec.yaml includes: assets: [.env]');
+    print('   3. .env contains: MISTRAL_API_KEY=your_key_here');
   }
   
   // 3. Initialize ML Model
@@ -41,18 +57,17 @@ void main() async {
     print('⚠️ ML model initialization failed: $e');
   }
 
-  try{
+  // 4. Initialize Chats
+  try {
     final chatInitializer = ChatInitializer();
     await chatInitializer.initializeUserChats();
-    print('Chats initialized successfully');
-  }catch(e){
-    print('Error initializing chats: $e');
+    print('✅ Chats initialized successfully');
+  } catch (e) {
+    print('⚠️ Error initializing chats: $e');
   }
-  
   
   runApp(const ChemoMonitorApp());
 }
-
 class ChemoMonitorApp extends StatelessWidget {
   const ChemoMonitorApp({super.key});
 
@@ -64,7 +79,7 @@ class ChemoMonitorApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'Poppins',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primaryBlue,
+          seedColor: AppColors.wisteriaBlue,
           background: AppColors.mainBackground,
           surface: Colors.white,
         ),
@@ -76,7 +91,7 @@ class ChemoMonitorApp extends StatelessWidget {
           titleTextStyle: AppTextStyles.heading3.copyWith(
             color: AppColors.textPrimary,
           ),
-          iconTheme: IconThemeData(color: AppColors.primaryBlue),
+          iconTheme: const IconThemeData(color: AppColors.wisteriaBlue),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -87,21 +102,21 @@ class ChemoMonitorApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-            borderSide: BorderSide(
-              color: AppColors.primaryBlue,
+            borderSide: const BorderSide(
+              color: AppColors.wisteriaBlue,
               width: 2,
             ),
           ),
-          contentPadding: EdgeInsets.symmetric(
+          contentPadding: const EdgeInsets.symmetric(
             horizontal: AppDimensions.paddingMedium,
             vertical: AppDimensions.paddingSmall,
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primaryBlue,
+            backgroundColor: AppColors.wisteriaBlue,
             foregroundColor: Colors.white,
-            minimumSize: Size(double.infinity, AppDimensions.buttonHeight),
+            minimumSize: const Size(double.infinity, AppDimensions.buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
             ),
@@ -120,15 +135,14 @@ class ChemoMonitorApp extends StatelessWidget {
         '/analytics': (context) => const AnalyticsScreen(),
         '/notifications': (context) => const NotificationsScreen(),
         '/profile': (context) => const ProfileEditScreen(),
-        '/settings': (context) => const SettingsScreen(),
+        '/settings': (context) => const settings.SettingsScreen(),
       },
     );
   }
 }
 
-
 class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({Key? key}) : super(key: key);  // FIXED: Proper constructor
+  const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -212,8 +226,8 @@ class AuthWrapper extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-           const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.wisteriaBlue),
             ),
             const SizedBox(height: 20),
             Text(

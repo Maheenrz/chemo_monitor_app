@@ -2,19 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
-
-// Soft Color Palette (add these if not in app_constants.dart)
-class SoftColors {
-  static const Color primaryBlue = Color(0xFF7BA3D6);
-  static const Color lightBlue = Color(0xFFE8F1FC);
-  static const Color softGreen = Color(0xFF6FD195);
-  static const Color paleGreen = Color(0xFFE8F8F0);
-  static const Color softPurple = Color(0xFF9B8ED4);
-  static const Color palePurple = Color(0xFFF2F0FC);
-  static const Color textPrimary = Color(0xFF2D3E50);
-  static const Color textSecondary = Color(0xFF8E9AAF);
-  static const Color riskHigh = Color(0xFFF08B9C);
-}
+import 'package:chemo_monitor_app/screens/shared/doctor_directory_screen.dart'; // Added import
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +28,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     
     _animationController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 800),
     );
     
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -74,19 +62,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = true);
     
     try {
-      print('🔐 Attempting login for: ${_emailController.text.trim()}');
-      
-      // Login to Firebase Auth
       final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
       
-      print('✅ Firebase Auth successful: ${userCredential.user?.uid}');
-      
       if (!mounted) return;
       
-      // Get user role from Firestore
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -98,29 +80,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final userData = userDoc.data() as Map<String, dynamic>;
         final role = userData['role']?.toString() ?? 'patient';
         
-        print('✅ User role: $role');
-        print('📍 Navigating to: ${role == 'doctor' ? '/doctor' : '/patient'}');
-        
-        // Navigate based on role using pushReplacementNamed
         if (role == 'doctor') {
           Navigator.of(context).pushReplacementNamed('/doctor');
         } else {
           Navigator.of(context).pushReplacementNamed('/patient');
         }
         
-        // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
-                children: [
+                children: const [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 12),
                   Text('Welcome back!'),
                 ],
               ),
-              backgroundColor: SoftColors.softGreen,
-              duration: Duration(seconds: 2),
+              backgroundColor: AppColors.frozenWater,
+              duration: const Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -129,9 +106,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           );
         }
       } else {
-        print('⚠️ User document not found, creating default profile...');
-        
-        // Create default user document
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userCredential.user!.uid)
@@ -143,17 +117,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           'createdAt': FieldValue.serverTimestamp(),
         });
         
-        print('✅ Default user document created');
-        
-        // Navigate to patient screen
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/patient');
         }
       }
       
     } on FirebaseAuthException catch (e) {
-      print('❌ Firebase Auth error: ${e.code} - ${e.message}');
-      
       String errorMessage = 'Login failed';
       
       switch (e.code) {
@@ -187,13 +156,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 12),
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
                 Expanded(child: Text(errorMessage)),
               ],
             ),
-            backgroundColor: SoftColors.riskHigh,
-            duration: Duration(seconds: 4),
+            backgroundColor: AppColors.pastelPetal,
+            duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -203,20 +172,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
       
     } catch (e) {
-      print('❌ Unexpected error: $e');
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
-              children: [
+              children: const [
                 Icon(Icons.warning_amber, color: Colors.white),
                 SizedBox(width: 12),
                 Expanded(child: Text('An unexpected error occurred')),
               ],
             ),
-            backgroundColor: SoftColors.riskHigh,
-            duration: Duration(seconds: 3),
+            backgroundColor: AppColors.pastelPetal,
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -231,7 +198,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  // Forgot Password Dialog
   Future<void> _showForgotPasswordDialog() async {
     final TextEditingController resetEmailController = TextEditingController();
     final GlobalKey<FormState> resetFormKey = GlobalKey<FormState>();
@@ -246,21 +212,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           title: Row(
             children: [
               Container(
-                padding: EdgeInsets.all(10),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: SoftColors.lightBlue,
+                  color: AppColors.honeydew,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.lock_reset,
-                  color: SoftColors.primaryBlue,
+                  color: AppColors.wisteriaBlue,
                 ),
               ),
-              SizedBox(width: 12),
-              Text(
+              const SizedBox(width: 12),
+              const Text(
                 'Reset Password',
                 style: TextStyle(
-                  color: SoftColors.textPrimary,
+                  color: AppColors.textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -272,26 +238,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                const Text(
                   'Enter your email address and we\'ll send you a link to reset your password.',
                   style: TextStyle(
-                    color: SoftColors.textSecondary,
+                    color: AppColors.textSecondary,
                     fontSize: 14,
                   ),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: resetEmailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined, color: SoftColors.primaryBlue),
+                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.wisteriaBlue),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: SoftColors.primaryBlue, width: 2),
+                      borderSide: const BorderSide(color: AppColors.wisteriaBlue, width: 2),
                     ),
                   ),
                   validator: (value) {
@@ -310,9 +276,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
+              child: const Text(
                 'Cancel',
-                style: TextStyle(color: SoftColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
             ElevatedButton(
@@ -329,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Row(
-                            children: [
+                            children: const [
                               Icon(Icons.check_circle, color: Colors.white),
                               SizedBox(width: 12),
                               Expanded(
@@ -337,8 +303,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ),
                             ],
                           ),
-                          backgroundColor: SoftColors.softGreen,
-                          duration: Duration(seconds: 4),
+                          backgroundColor: AppColors.frozenWater,
+                          duration: const Duration(seconds: 4),
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -358,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(errorMessage),
-                        backgroundColor: SoftColors.riskHigh,
+                        backgroundColor: AppColors.pastelPetal,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -369,12 +335,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: SoftColors.primaryBlue,
+                backgroundColor: AppColors.wisteriaBlue,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Text('Send Reset Link'),
+              child: const Text('Send Reset Link'),
             ),
           ],
         );
@@ -385,143 +351,131 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              SoftColors.lightBlue,
-              SoftColors.palePurple,
-              Colors.white,
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(24),
-            child: AnimatedBuilder(
-              animation: _animationController,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: Transform.translate(
-                    offset: Offset(0, _slideAnimation.value),
-                    child: child,
+      backgroundColor: AppColors.lightBackground,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: AnimatedBuilder(
+            animation: _animationController,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _fadeAnimation.value,
+                child: Transform.translate(
+                  offset: Offset(0, _slideAnimation.value),
+                  child: child,
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 60),
+                
+                _buildLogo(),
+                
+                const SizedBox(height: 40),
+                
+                const Text(
+                  'Welcome Back',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
-                );
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(height: 60),
-                  
-                  _buildLogo(),
-                  
-                  SizedBox(height: 40),
-                  
-                  Text(
-                    'Welcome Back',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: SoftColors.textPrimary,
-                    ),
+                ),
+                
+                const SizedBox(height: 10),
+                
+                const Text(
+                  'Monitor your health journey',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppColors.textSecondary,
                   ),
-                  
-                  SizedBox(height: 10),
-                  
-                  Text(
-                    'Monitor your health journey',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: SoftColors.textSecondary,
-                    ),
-                  ),
-                  
-                  SizedBox(height: 60),
-                  
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        _buildTextField(
-                          controller: _emailController,
-                          label: 'Email',
-                          icon: Icons.email_outlined,
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your email';
-                            }
-                            if (!value.contains('@')) {
-                              return 'Please enter a valid email';
-                            }
-                            return null;
-                          },
-                        ),
-                        
-                        SizedBox(height: 20),
-                        
-                        _buildTextField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          icon: Icons.lock_outline,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword 
-                                ? Icons.visibility_outlined 
-                                : Icons.visibility_off_outlined,
-                              color: SoftColors.textSecondary,
-                            ),
-                            onPressed: () {
-                              setState(() => _obscurePassword = !_obscurePassword);
-                            },
+                ),
+                
+                const SizedBox(height: 60),
+                
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      _buildTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      _buildTextField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        icon: Icons.lock_outline,
+                        obscureText: _obscurePassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword 
+                              ? Icons.visibility_outlined 
+                              : Icons.visibility_off_outlined,
+                            color: AppColors.textSecondary,
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your password';
-                            }
-                            if (value.length < 6) {
-                              return 'Password must be at least 6 characters';
-                            }
-                            return null;
+                          onPressed: () {
+                            setState(() => _obscurePassword = !_obscurePassword);
                           },
                         ),
-                        
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _showForgotPasswordDialog,
-                            child: Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                color: SoftColors.primaryBlue,
-                              ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your password';
+                          }
+                          if (value.length < 6) {
+                            return 'Password must be at least 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _showForgotPasswordDialog,
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: AppColors.wisteriaBlue,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                        
-                        SizedBox(height: 20),
-                        
-                        _buildLoginButton(),
-                        
-                        SizedBox(height: 30),
-                        
-                        _buildDivider(),
-                        
-                        SizedBox(height: 30),
-                        
-                        _buildRegisterLink(),
-                      ],
-                    ),
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      _buildLoginButton(),
+                      
+                      const SizedBox(height: 30),
+                      
+                      _buildDivider(),
+                      
+                      const SizedBox(height: 30),
+                      
+                      _buildRegisterLink(),
+                    ],
                   ),
-                  
-                  SizedBox(height: 60),
-                ],
-              ),
+                ),
+                
+                const SizedBox(height: 60),
+              ],
             ),
           ),
         ),
@@ -530,26 +484,25 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 140,
-      height: 140,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          Icons.medical_services_rounded,
-          size: 60,
-          color: SoftColors.primaryBlue,
-        ),
+    return ClipOval(
+      child: Image.asset(
+        'assets/images/app_logo.png',
+        width: 140,
+        height: 140,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          // Fallback to icon if image fails to load
+          return Container(
+            width: 140,
+            height: 140,
+            color: Colors.white,
+            child: Icon(
+              Icons.medical_services_rounded,
+              size: 70,
+              color: AppColors.wisteriaBlue,
+            ),
+          );
+        },
       ),
     );
   }
@@ -567,27 +520,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 5,
-            spreadRadius: 1,
-          ),
-        ],
+        boxShadow: AppShadows.elevation1,
       ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
-        style: TextStyle(fontSize: 16),
+        style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
-            color: SoftColors.textSecondary,
+          labelStyle: const TextStyle(
+            color: AppColors.textSecondary,
           ),
           prefixIcon: Icon(
             icon,
-            color: SoftColors.primaryBlue,
+            color: AppColors.wisteriaBlue,
           ),
           suffixIcon: suffixIcon,
           border: OutlineInputBorder(
@@ -596,14 +543,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(
-              color: SoftColors.primaryBlue,
+            borderSide: const BorderSide(
+              color: AppColors.wisteriaBlue,
               width: 2,
             ),
           ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: EdgeInsets.symmetric(
+          contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 16,
           ),
@@ -618,19 +565,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [SoftColors.primaryBlue, Color(0xFF4A6FA5)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+        color: AppColors.wisteriaBlue,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: SoftColors.primaryBlue.withOpacity(0.3),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
+        boxShadow: AppShadows.elevation2,
       ),
       child: Material(
         color: Colors.transparent,
@@ -642,11 +579,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             alignment: Alignment.center,
             children: [
               AnimatedOpacity(
-                duration: Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 200),
                 opacity: _isLoading ? 0.0 : 1.0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  children: const [
                     Text(
                       'Login',
                       style: TextStyle(
@@ -666,7 +603,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
               
               if (_isLoading)
-                SizedBox(
+                const SizedBox(
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
@@ -686,22 +623,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       children: [
         Expanded(
           child: Divider(
-            color: SoftColors.textSecondary.withOpacity(0.3),
+            color: AppColors.textSecondary.withOpacity(0.3),
             height: 1,
           ),
         ),
-        Padding(
+        const Padding(
           padding: EdgeInsets.symmetric(horizontal: 15),
           child: Text(
             'or',
             style: TextStyle(
-              color: SoftColors.textSecondary,
+              color: AppColors.textSecondary,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: SoftColors.textSecondary.withOpacity(0.3),
+            color: AppColors.textSecondary.withOpacity(0.3),
             height: 1,
           ),
         ),
@@ -710,26 +647,68 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Widget _buildRegisterLink() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        Text(
-          'Don\'t have an account? ',
-          style: TextStyle(
-            color: SoftColors.textSecondary,
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(context, '/register');
+        // Find Doctor Button
+        TextButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DoctorDirectoryScreen(),
+              ),
+            );
           },
-          child: Text(
-            'Register',
-            style: TextStyle(
-              color: SoftColors.primaryBlue,
-              fontWeight: FontWeight.w600,
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.frozenWater.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.medical_services_rounded,
+              size: 18,
+              color: AppColors.frozenWater,
             ),
           ),
+          label: const Text(
+            'Find Your Doctor',
+            style: TextStyle(
+              color: AppColors.frozenWater,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          ),
+        ),
+        
+        const SizedBox(height: 8),
+        
+        // Register Link
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Don\'t have an account? ',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.pushNamed(context, '/register');
+              },
+              child: const Text(
+                'Register',
+                style: TextStyle(
+                  color: AppColors.wisteriaBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

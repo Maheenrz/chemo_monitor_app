@@ -6,6 +6,20 @@ import 'package:chemo_monitor_app/models/user_model.dart';
 import 'package:chemo_monitor_app/screens/shared/profile_edit_screen.dart';
 import 'package:chemo_monitor_app/screens/shared/login_screen.dart';
 
+// Add this if not in your constants
+class AppInfo {
+  static const String appName = 'Chemo Monitor';
+  static const String version = '1.0.0';
+  static const String description = 'Oncology patient monitoring app with AI-powered risk assessment and real-time health tracking.';
+}
+
+// Password strength enum
+enum PasswordStrength {
+  weak,
+  medium,
+  strong,
+}
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -15,7 +29,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _authService = AuthService();
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   UserModel? _userProfile;
   bool _isLoading = true;
   bool _notificationsEnabled = true;
@@ -127,292 +140,491 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ✅ Change Password Functionality
   Future<void> _changePassword() async {
-  final currentPasswordController = TextEditingController();
-  final newPasswordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
-  bool _isLoading = false;
-  bool _showCurrentPassword = false;
-  bool _showNewPassword = false;
-  bool _showConfirmPassword = false;
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    
+    // Password visibility states
+    bool showCurrentPassword = false;
+    bool showNewPassword = false;
+    bool showConfirmPassword = false;
+    
+    // Password strength tracking
+    PasswordStrength passwordStrength = PasswordStrength.weak;
+    bool isPasswordLoading = false;
 
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withOpacity(0.1),
+    // Calculate password strength
+    PasswordStrength calculatePasswordStrength(String password) {
+      int score = 0;
+      
+      if (password.length >= 8) score++;
+      if (password.contains(RegExp(r'[a-z]'))) score++;
+      if (password.contains(RegExp(r'[A-Z]'))) score++;
+      if (password.contains(RegExp(r'[0-9]'))) score++;
+      if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) score++;
+      
+      if (score >= 4) return PasswordStrength.strong;
+      if (score >= 2) return PasswordStrength.medium;
+      return PasswordStrength.weak;
+    }
+
+    Color getPasswordStrengthColor(PasswordStrength strength) {
+      switch (strength) {
+        case PasswordStrength.weak:
+          return AppColors.riskHigh;
+        case PasswordStrength.medium:
+          return AppColors.riskModerate;
+        case PasswordStrength.strong:
+          return AppColors.softGreen;
+      }
+    }
+
+    String getPasswordStrengthText(PasswordStrength strength) {
+      switch (strength) {
+        case PasswordStrength.weak:
+          return 'Weak password';
+        case PasswordStrength.medium:
+          return 'Medium strength';
+        case PasswordStrength.strong:
+          return 'Strong password';
+      }
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          // Update strength when password changes
+          void updateStrength() {
+            setState(() {
+              passwordStrength = calculatePasswordStrength(newPasswordController.text);
+            });
+          }
+
+          Widget buildRequirement(String text, bool isMet) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(
+                    isMet ? Icons.check_circle : Icons.circle_outlined,
+                    size: 14,
+                    color: isMet ? AppColors.softGreen : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: AppTextStyles.caption.copyWith(
+                        color: isMet ? AppColors.softGreen : AppColors.textSecondary,
+                        decoration: isMet ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          void showSnackBar(String message, Color color) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: color,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
                 ),
-                child: Icon(
-                  Icons.lock_reset_rounded,
-                  color: AppColors.primaryBlue,
-                  size: 24,
-                ),
+                duration: const Duration(seconds: 3),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'Change Password',
-                style: AppTextStyles.heading3,
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            );
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+            ),
+            title: Row(
               children: [
-                TextField(
-                  controller: currentPasswordController,
-                  obscureText: !_showCurrentPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Current Password',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _showCurrentPassword ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() => _showCurrentPassword = !_showCurrentPassword);
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: !_showNewPassword,
-                  decoration: InputDecoration(
-                    labelText: 'New Password',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _showNewPassword ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() => _showNewPassword = !_showNewPassword);
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmPasswordController,
-                  obscureText: !_showConfirmPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm New Password',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _showConfirmPassword ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() => _showConfirmPassword = !_showConfirmPassword);
-                      },
-                    ),
-                  ),
-                ),
-                
-                // Password Requirements
-                const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.lightBlue.withOpacity(0.3),
+                    color: AppColors.primaryBlue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Password must contain:',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '• At least 8 characters\n• One uppercase letter\n• One lowercase letter\n• One number',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                  child: Icon(
+                    Icons.lock_reset_rounded,
+                    color: AppColors.primaryBlue,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Change Password',
+                    style: AppTextStyles.heading3,
                   ),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: _isLoading ? null : () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Current Password
+                  TextField(
+                    controller: currentPasswordController,
+                    obscureText: !showCurrentPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Current Password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                      ),
+                      prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryBlue),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          showCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                          color: AppColors.primaryBlue,
+                        ),
+                        onPressed: () {
+                          setState(() => showCurrentPassword = !showCurrentPassword);
+                        },
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // New Password with real-time strength validation
+                  TextField(
+                    controller: newPasswordController,
+                    obscureText: !showNewPassword,
+                    onChanged: (value) => updateStrength(),
+                    decoration: InputDecoration(
+                      labelText: 'New Password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                      ),
+                      prefixIcon: Icon(Icons.lock, color: AppColors.primaryBlue),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          showNewPassword ? Icons.visibility : Icons.visibility_off,
+                          color: AppColors.primaryBlue,
+                        ),
+                        onPressed: () {
+                          setState(() => showNewPassword = !showNewPassword);
+                        },
+                      ),
+                    ),
+                  ),
+                  
+                  // Password Strength Indicator
+                  if (newPasswordController.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Strength Bar
+                        Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightBlue,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: passwordStrength == PasswordStrength.weak
+                                ? 0.33
+                                : passwordStrength == PasswordStrength.medium
+                                    ? 0.66
+                                    : 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: getPasswordStrengthColor(passwordStrength),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 4),
+                        
+                        // Strength Text
+                        Row(
+                          children: [
+                            Icon(
+                              passwordStrength == PasswordStrength.strong
+                                  ? Icons.check_circle
+                                  : passwordStrength == PasswordStrength.medium
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.error,
+                              size: 14,
+                              color: getPasswordStrengthColor(passwordStrength),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              getPasswordStrengthText(passwordStrength),
+                              style: AppTextStyles.caption.copyWith(
+                                color: getPasswordStrengthColor(passwordStrength),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Confirm Password
+                  TextField(
+                    controller: confirmPasswordController,
+                    obscureText: !showConfirmPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm New Password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                      ),
+                      prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryBlue),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          showConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                          color: AppColors.primaryBlue,
+                        ),
+                        onPressed: () {
+                          setState(() => showConfirmPassword = !showConfirmPassword);
+                        },
+                      ),
+                    ),
+                  ),
+                  
+                  // Password Requirements
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightBlue.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Password Requirements:',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        buildRequirement(
+                          'At least 8 characters',
+                          newPasswordController.text.length >= 8,
+                        ),
+                        buildRequirement(
+                          'One uppercase letter',
+                          newPasswordController.text.contains(RegExp(r'[A-Z]')),
+                        ),
+                        buildRequirement(
+                          'One lowercase letter',
+                          newPasswordController.text.contains(RegExp(r'[a-z]')),
+                        ),
+                        buildRequirement(
+                          'One number',
+                          newPasswordController.text.contains(RegExp(r'[0-9]')),
+                        ),
+                        buildRequirement(
+                          'One special character',
+                          newPasswordController.text.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            ElevatedButton(
-              onPressed: _isLoading ? null : () async {
-                // Validate inputs
-                if (currentPasswordController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter your current password'),
-                      backgroundColor: AppColors.riskModerate,
-                    ),
-                  );
-                  return;
-                }
-                
-                if (newPasswordController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter a new password'),
-                      backgroundColor: AppColors.riskModerate,
-                    ),
-                  );
-                  return;
-                }
-                
-                if (newPasswordController.text != confirmPasswordController.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('New passwords do not match'),
-                      backgroundColor: AppColors.riskModerate,
-                    ),
-                  );
-                  return;
-                }
-                
-                if (newPasswordController.text.length < 8) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password must be at least 8 characters'),
-                      backgroundColor: AppColors.riskModerate,
-                    ),
-                  );
-                  return;
-                }
-                
-                // Check if new password is different from current
-                if (currentPasswordController.text == newPasswordController.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('New password must be different from current password'),
-                      backgroundColor: AppColors.riskModerate,
-                    ),
-                  );
-                  return;
-                }
-                
-                setState(() => _isLoading = true);
-                
-                try {
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user == null) {
-                    throw Exception('User not logged in');
+            actions: [
+              TextButton(
+                onPressed: isPasswordLoading ? null : () => Navigator.pop(context, false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: isPasswordLoading ? AppColors.textSecondary : AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  disabledBackgroundColor: AppColors.textSecondary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                ),
+                onPressed: isPasswordLoading ? null : () async {
+                  // ✅ COMPREHENSIVE VALIDATION
+                  
+                  // 1. Check if fields are empty
+                  if (currentPasswordController.text.isEmpty) {
+                    showSnackBar(
+                      'Please enter your current password',
+                      AppColors.riskModerate,
+                    );
+                    return;
                   }
                   
-                  if (user.email == null) {
-                    throw Exception('User email not available');
+                  if (newPasswordController.text.isEmpty) {
+                    showSnackBar(
+                      'Please enter a new password',
+                      AppColors.riskModerate,
+                    );
+                    return;
                   }
                   
-                  // Try to reauthenticate with current password
-                  final credential = EmailAuthProvider.credential(
-                    email: user.email!,
-                    password: currentPasswordController.text,
-                  );
+                  // 2. ✅ VALIDATE PASSWORD STRENGTH
+                  if (passwordStrength == PasswordStrength.weak) {
+                    showSnackBar(
+                      'Password is too weak. Please use a stronger password',
+                      AppColors.riskHigh,
+                    );
+                    return;
+                  }
                   
-                  await user.reauthenticateWithCredential(credential);
+                  // 3. Check if passwords match
+                  if (newPasswordController.text != confirmPasswordController.text) {
+                    showSnackBar(
+                      'New passwords do not match',
+                      AppColors.riskModerate,
+                    );
+                    return;
+                  }
                   
-                  // Update password
-                  await user.updatePassword(newPasswordController.text);
+                  // 4. ✅ VALIDATE MINIMUM LENGTH
+                  if (newPasswordController.text.length < 8) {
+                    showSnackBar(
+                      'Password must be at least 8 characters',
+                      AppColors.riskModerate,
+                    );
+                    return;
+                  }
                   
-                  // Success - close dialog and show success message
-                  Navigator.pop(context, true);
+                  // 5. ✅ CHECK PASSWORD COMPLEXITY
+                  final password = newPasswordController.text;
+                  final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+                  final hasLowercase = password.contains(RegExp(r'[a-z]'));
+                  final hasNumber = password.contains(RegExp(r'[0-9]'));
+                  final hasSpecial = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
                   
-                } catch (e) {
-                  setState(() => _isLoading = false);
+                  if (!hasUppercase || !hasLowercase || !hasNumber) {
+                    showSnackBar(
+                      'Password must contain uppercase, lowercase, and numbers',
+                      AppColors.riskModerate,
+                    );
+                    return;
+                  }
                   
-                  String errorMessage = 'Error updating password';
+                  // 6. Check if new password is different from current
+                  if (currentPasswordController.text == newPasswordController.text) {
+                    showSnackBar(
+                      'New password must be different from current password',
+                      AppColors.riskModerate,
+                    );
+                    return;
+                  }
                   
-                  if (e is FirebaseAuthException) {
+                  setState(() => isPasswordLoading = true);
+                  
+                  try {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null || user.email == null) {
+                      throw Exception('User not logged in');
+                    }
+                    
+                    // Reauthenticate
+                    final credential = EmailAuthProvider.credential(
+                      email: user.email!,
+                      password: currentPasswordController.text,
+                    );
+                    
+                    await user.reauthenticateWithCredential(credential);
+                    
+                    // Update password
+                    await user.updatePassword(newPasswordController.text);
+                    
+                    // Success
+                    Navigator.pop(context, true);
+                    
+                  } on FirebaseAuthException catch (e) {
+                    setState(() => isPasswordLoading = false);
+                    
+                    String errorMessage;
                     switch (e.code) {
                       case 'wrong-password':
+                      case 'invalid-credential':
                         errorMessage = 'Current password is incorrect';
                         break;
                       case 'weak-password':
-                        errorMessage = 'Password is too weak. Use a stronger password';
+                        errorMessage = 'Password is too weak';
                         break;
                       case 'requires-recent-login':
-                        errorMessage = 'Please log in again to change password';
-                        break;
-                      case 'user-not-found':
-                        errorMessage = 'User account not found';
-                        break;
-                      case 'user-disabled':
-                        errorMessage = 'User account is disabled';
-                        break;
-                      case 'invalid-credential':
-                        errorMessage = 'Invalid credentials';
+                        errorMessage = 'Please log out and log in again to change password';
                         break;
                       case 'network-request-failed':
-                        errorMessage = 'Network error. Check your internet connection';
+                        errorMessage = 'Network error. Check your connection';
                         break;
                       default:
                         errorMessage = 'Error: ${e.message}';
                     }
+                    
+                    showSnackBar(errorMessage, AppColors.riskHigh);
+                  } catch (e) {
+                    setState(() => isPasswordLoading = false);
+                    showSnackBar(
+                      'Unexpected error: ${e.toString()}',
+                      AppColors.riskHigh,
+                    );
                   }
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(errorMessage),
-                      backgroundColor: AppColors.riskHigh,
-                      duration: const Duration(seconds: 4),
-                    ),
-                  );
-                }
-              },
-              child: _isLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text('Update Password'),
-            ),
-          ],
-        );
-      },
-    ),
-  );
+                },
+                child: isPasswordLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Update Password'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
 
-  if (result == true) {
-    // Show success message
-    if (mounted) {
+    if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password updated successfully!'),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Password updated successfully!')),
+            ],
+          ),
           backgroundColor: AppColors.softGreen,
-          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
   }
-}
 
   // ✅ Notification Toggle
   void _toggleNotifications(bool value) {
@@ -582,7 +794,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildSection(
                           title: 'Account',
                           items: [
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.person_outlined,
                               title: 'Edit Profile',
                               subtitle: 'Update your personal information',
@@ -596,7 +808,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 _loadUserProfile(); // Reload after edit
                               },
                             ),
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.lock_outlined,
                               title: 'Change Password',
                               subtitle: 'Update your password',
@@ -611,7 +823,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildSection(
                           title: 'Preferences',
                           items: [
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.notifications_outlined,
                               title: 'Notifications',
                               subtitle: 'Manage notification settings',
@@ -645,7 +857,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                               },
                             ),
-                            // ❌ LANGUAGE OPTION COMPLETELY REMOVED
                           ],
                         ),
 
@@ -655,7 +866,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildSection(
                           title: 'About',
                           items: [
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.info_outlined,
                               title: 'About App',
                               subtitle: 'Version ${AppInfo.version}',
@@ -663,12 +874,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 _showAboutDialog(context);
                               },
                             ),
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.privacy_tip_outlined,
                               title: 'Privacy Policy',
                               subtitle: 'View our privacy policy',
                               onTap: () {
-                                // Show snackbar instead of opening URL
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -687,12 +897,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                               },
                             ),
-                            _SettingsItem(
+                            SettingsItem(
                               icon: Icons.description_outlined,
                               title: 'Terms of Service',
                               subtitle: 'View terms and conditions',
                               onTap: () {
-                                // Show snackbar instead of opening URL
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -850,7 +1059,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSection({
     required String title,
-    required List<_SettingsItem> items,
+    required List<SettingsItem> items,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -880,10 +1089,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _buildSettingsItem(item),
                   if (index < items.length - 1)
-                    Divider(
+                    const Divider(
                       height: 1,
                       thickness: 1,
-                      color: AppColors.lightBlue,
                       indent: 68,
                     ),
                 ],
@@ -895,7 +1103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSettingsItem(_SettingsItem item) {
+  Widget _buildSettingsItem(SettingsItem item) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1023,13 +1231,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _SettingsItem {
+class SettingsItem {
   final IconData icon;
   final String title;
   final String? subtitle;
   final VoidCallback onTap;
 
-  _SettingsItem({
+  SettingsItem({
     required this.icon,
     required this.title,
     this.subtitle,

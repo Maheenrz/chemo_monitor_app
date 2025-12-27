@@ -40,11 +40,11 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
 
   // Validation state
   final Map<String, bool> _fieldValid = {
-    'heartRate': false,
-    'spo2': false,
-    'systolicBP': false,
-    'diastolicBP': false,
-    'temperature': false,
+    'heartRate': true,
+    'spo2': true,
+    'systolicBP': true,
+    'diastolicBP': true,
+    'temperature': true,
   };
 
   // Animation
@@ -76,7 +76,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     );
 
     _animationController.forward();
-    
+
     // Initialize ML model
     _initializeML();
   }
@@ -105,7 +105,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   void _nextStep() {
     if (_currentStep < _steps.length - 1) {
       _pageController.nextPage(
-        duration: Duration(milliseconds: 500),
+        duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
       setState(() => _currentStep++);
@@ -115,7 +115,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   void _previousStep() {
     if (_currentStep > 0) {
       _pageController.previousPage(
-        duration: Duration(milliseconds: 500),
+        duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
       setState(() => _currentStep--);
@@ -136,8 +136,11 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     final diastolicBP = int.tryParse(_diastolicBPController.text);
     final temperature = double.tryParse(_temperatureController.text);
 
-    if (heartRate == null || spo2 == null || systolicBP == null || 
-        diastolicBP == null || temperature == null) {
+    if (heartRate == null ||
+        spo2 == null ||
+        systolicBP == null ||
+        diastolicBP == null ||
+        temperature == null) {
       _showSnackBar('Please enter valid numbers', AppColors.riskModerate);
       return;
     }
@@ -164,7 +167,8 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
       diastolicBP: diastolicBP,
       temperature: temperature,
     )) {
-      _showEmergencyAlert(heartRate, spo2, systolicBP, diastolicBP, temperature);
+      _showEmergencyAlert(
+          heartRate, spo2, systolicBP, diastolicBP, temperature);
       return;
     }
 
@@ -175,62 +179,57 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
 
     // 6. Proceed with submission
     _proceedWithSubmission(
-      heartRate, spo2, systolicBP, diastolicBP, temperature
-    );
+        heartRate, spo2, systolicBP, diastolicBP, temperature);
   }
 
-  void _proceedWithSubmission(
-  int heartRate, 
-  int spo2, 
-  int systolicBP, 
-  int diastolicBP, 
-  double temperature
-) async {
-  setState(() => _isSubmitting = true);
+  void _proceedWithSubmission(int heartRate, int spo2, int systolicBP,
+      int diastolicBP, double temperature) async {
+    setState(() => _isSubmitting = true);
 
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not logged in');
 
-    // Submit to health data service (includes ML)
-    final healthDataId = await _healthDataService.addHealthData(
-      patientId: user.uid,
-      heartRate: heartRate,
-      spo2Level: spo2,
-      systolicBP: systolicBP,
-      diastolicBP: diastolicBP,
-      temperature: temperature,
-      additionalNotes:
-          _notesController.text.isEmpty ? null : _notesController.text,
-    );
-
-    print('✅ Health data submitted successfully: $healthDataId');
-
-    // Get the newly created health data
-    final latestData = await _healthDataService.getLatestHealthData(user.uid);
-    
-    if (latestData != null && mounted) {
-      // Navigate to results screen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VitalsResultScreen(healthData: latestData),
-        ),
+      // Submit to health data service (includes ML)
+      final healthDataId = await _healthDataService.addHealthData(
+        patientId: user.uid,
+        heartRate: heartRate,
+        spo2Level: spo2,
+        systolicBP: systolicBP,
+        diastolicBP: diastolicBP,
+        temperature: temperature,
+        additionalNotes:
+            _notesController.text.isEmpty ? null : _notesController.text,
       );
-    } else {
+
+      print('✅ Health data submitted successfully: $healthDataId');
+
+      // Get the newly created health data
+      final latestData = await _healthDataService.getLatestHealthData(user.uid);
+
+      if (latestData != null && mounted) {
+        // Navigate to results screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VitalsResultScreen(healthData: latestData),
+          ),
+        );
+      } else {
+        if (mounted) {
+          _showSnackBar(
+              'Vitals submitted! Analysis complete.', AppColors.success);
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      print('❌ Error submitting vitals: $e');
       if (mounted) {
-        _showSnackBar('Vitals submitted! Analysis complete.', AppColors.softGreen);
-        Navigator.pop(context, true);
+        _showSnackBar('Error: ${e.toString()}', AppColors.riskHigh);
+        setState(() => _isSubmitting = false);
       }
     }
-  } catch (e) {
-    print('❌ Error submitting vitals: $e');
-    if (mounted) {
-      _showSnackBar('Error: ${e.toString()}', AppColors.riskHigh);
-      setState(() => _isSubmitting = false);
-    }
   }
-}
 
   bool _validateForm() {
     return _heartRateController.text.isNotEmpty &&
@@ -244,84 +243,189 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('❌ Validation Errors'),
+        title: const Text('❌ Validation Errors'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Please correct the following:'),
-            SizedBox(height: 10),
-            ...validation.errors.map((error) => 
-              Text('• $error', style: TextStyle(color: AppColors.riskHigh))
-            ).toList(),
+            const Text('Please correct the following:'),
+            const SizedBox(height: 10),
+            ...validation.errors
+                .map((error) => Text('• $error',
+                    style: const TextStyle(color: AppColors.riskHigh)))
+                .toList(),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
+            child: const Text('OK'),
           ),
         ],
       ),
     );
   }
 
-  void _showEmergencyAlert(
-    int heartRate, int spo2, int systolicBP, int diastolicBP, double temperature
-  ) {
+  void _showEmergencyAlert(int heartRate, int spo2, int systolicBP,
+      int diastolicBP, double temperature) {
+    // Build list of critical issues
+    final List<String> criticalIssues = [];
+
+    if (spo2 < 90) criticalIssues.add('• Oxygen critically low: $spo2%');
+    if (heartRate > 150)
+      criticalIssues.add('• Heart rate dangerously high: $heartRate bpm');
+    if (heartRate < 40)
+      criticalIssues.add('• Heart rate dangerously low: $heartRate bpm');
+    if (temperature > 39.0)
+      criticalIssues.add('• High fever: ${temperature.toStringAsFixed(1)}°C');
+    if (temperature < 35.5)
+      criticalIssues.add(
+          '• Dangerously low temperature: ${temperature.toStringAsFixed(1)}°C');
+    if (systolicBP > 180)
+      criticalIssues.add('• Severely high blood pressure: $systolicBP mmHg');
+    if (diastolicBP > 120)
+      criticalIssues.add('• Severely high diastolic: $diastolicBP mmHg');
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        ),
         title: Row(
           children: [
-            Icon(Icons.warning, color: Colors.red),
-            SizedBox(width: 10),
-            Text('🚨 EMERGENCY ALERT'),
+            Icon(Icons.warning_rounded, color: AppColors.riskHigh, size: 28),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                '🚨 EMERGENCY ALERT',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.riskHigh,
+                ),
+              ),
+            ),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('CRITICAL VITAL SIGNS DETECTED:', 
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 15),
-              if (spo2 < 90) Text('• Oxygen critically low: $spo2%'),
-              if (heartRate > 150) Text('• Heart rate dangerously high: $heartRate bpm'),
-              if (heartRate < 40) Text('• Heart rate dangerously low: $heartRate bpm'),
-              if (temperature > 39.0) Text('• High fever: ${temperature.toStringAsFixed(1)}°C'),
-              if (temperature < 35.5) Text('• Dangerously low temperature: ${temperature.toStringAsFixed(1)}°C'),
-              if (systolicBP > 180) Text('• Severely high blood pressure: $systolicBP mmHg'),
-              if (diastolicBP > 120) Text('• Severely high diastolic pressure: $diastolicBP mmHg'),
-              SizedBox(height: 15),
-              Text('RECOMMENDED ACTION:', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
-              Text('1. Contact your oncology team IMMEDIATELY\n'
-                  '2. If unavailable, call emergency services\n'
-                  '3. Rest and avoid exertion\n'
-                  '4. Have someone stay with you'),
-            ],
+        content: ConstrainedBox(
+          // ✅ FIXED: Maximum height to prevent overflow
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.riskHighBg,
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                  child: const Text(
+                    'CRITICAL VITAL SIGNS DETECTED',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.riskHigh,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                // Critical issues
+                ...criticalIssues
+                    .map((issue) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            issue,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+
+                const SizedBox(height: 15),
+
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightBlue,
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'RECOMMENDED ACTION:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '1. Contact your oncology team IMMEDIATELY\n'
+                        '2. If unavailable, call emergency services\n'
+                        '3. Rest and avoid exertion\n'
+                        '4. Have someone stay with you',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                const Text(
+                  'Do you want to record these values anyway?',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
           TextButton(
-            child: Text('CANCEL'),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
             onPressed: () => Navigator.pop(context),
           ),
+          const SizedBox(width: 8),
           ElevatedButton(
-            child: Text('PROCEED ANYWAY'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.riskHigh,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              ),
             ),
             onPressed: () {
               Navigator.pop(context);
               _proceedWithSubmission(
-                heartRate, spo2, systolicBP, diastolicBP, temperature
-              );
+                  heartRate, spo2, systolicBP, diastolicBP, temperature);
             },
+            child: const Text('PROCEED ANYWAY'),
           ),
         ],
       ),
@@ -330,7 +434,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
 
   Future<void> _showWarningDialog(ValidationResult validation) async {
     if (!validation.hasWarnings && !validation.hasAlerts) return;
-    
+
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -341,32 +445,34 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (validation.hasAlerts) ...[
-                Text('Medical alerts detected:'),
-                SizedBox(height: 10),
-                ...validation.alerts.map((alert) => 
-                  Text('• $alert', style: TextStyle(color: Colors.orange))
-                ).toList(),
-                SizedBox(height: 15),
+                const Text('Medical alerts detected:'),
+                const SizedBox(height: 10),
+                ...validation.alerts
+                    .map((alert) => Text('• $alert',
+                        style: const TextStyle(color: Colors.orange)))
+                    .toList(),
+                const SizedBox(height: 15),
               ],
               if (validation.hasWarnings) ...[
-                Text('Warning signs:'),
-                SizedBox(height: 10),
-                ...validation.warnings.map((warning) => 
-                  Text('• $warning', style: TextStyle(color: Colors.blue))
-                ).toList(),
+                const Text('Warning signs:'),
+                const SizedBox(height: 10),
+                ...validation.warnings
+                    .map((warning) => Text('• $warning',
+                        style: const TextStyle(color: Colors.blue)))
+                    .toList(),
               ],
-              SizedBox(height: 15),
-              Text('Would you like to continue with submission?'),
+              const SizedBox(height: 15),
+              const Text('Would you like to continue with submission?'),
             ],
           ),
         ),
         actions: [
           TextButton(
-            child: Text('EDIT VALUES'),
+            child: const Text('EDIT VALUES'),
             onPressed: () => Navigator.pop(context),
           ),
           ElevatedButton(
-            child: Text('CONTINUE'),
+            child: const Text('CONTINUE'),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -396,7 +502,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
         backgroundColor: Colors.white,
         leading: IconButton(
           icon: Container(
-            padding: EdgeInsets.all(AppDimensions.spaceS),
+            padding: const EdgeInsets.all(AppDimensions.spaceS),
             decoration: BoxDecoration(
               color: AppColors.lightBlue,
               borderRadius: BorderRadius.circular(AppDimensions.radiusCircle),
@@ -404,7 +510,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             child: Icon(
               Icons.arrow_back_rounded,
               size: AppDimensions.iconS,
-              color: AppColors.primaryBlue,
+              color: AppColors.wisteriaBlue,
             ),
           ),
           onPressed: () => Navigator.pop(context),
@@ -436,7 +542,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _buildHeartRateStep(),
                   _buildSpO2Step(),
@@ -457,24 +563,24 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
 
   Widget _buildProgressBar() {
     return Padding(
-      padding: EdgeInsets.all(AppDimensions.paddingMedium),
+      padding: const EdgeInsets.all(AppDimensions.paddingMedium),
       child: Column(
         children: [
           LinearProgressIndicator(
             value: (_currentStep + 1) / _steps.length,
             backgroundColor: AppColors.lightBlue,
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.wisteriaBlue),
             minHeight: 4,
             borderRadius: BorderRadius.circular(AppDimensions.radiusCircle),
           ),
-          SizedBox(height: AppDimensions.spaceS),
+          const SizedBox(height: AppDimensions.spaceS),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 _steps[_currentStep],
                 style: AppTextStyles.caption.copyWith(
-                  color: AppColors.primaryBlue,
+                  color: AppColors.wisteriaBlue,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -494,11 +600,11 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   // Step 1: Heart Rate
   Widget _buildHeartRateStep() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppDimensions.paddingXL),
+      padding: const EdgeInsets.all(AppDimensions.paddingXL),
       child: Column(
         children: [
           GlassCard(
-            padding: EdgeInsets.all(AppDimensions.paddingLarge),
+            padding: const EdgeInsets.all(AppDimensions.paddingLarge),
             child: Column(
               children: [
                 Container(
@@ -516,7 +622,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 Text(
                   'Heart Rate',
@@ -525,7 +631,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                 ),
 
-                SizedBox(height: AppDimensions.spaceM),
+                const SizedBox(height: AppDimensions.spaceM),
 
                 Text(
                   'Measure your resting heart rate in beats per minute (bpm)',
@@ -535,7 +641,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   textAlign: TextAlign.center,
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 _buildNumberInput(
                   key: 'heartRate',
@@ -547,12 +653,12 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   unit: 'bpm',
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 // Reference Ranges
                 _buildReferenceRanges(
                   title: 'Normal Range: 60-100 bpm',
-                  items: [
+                  items: const [
                     'Below 60: Bradycardia',
                     '60-100: Normal',
                     '100-120: Tachycardia',
@@ -571,35 +677,35 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   // Step 2: SpO2
   Widget _buildSpO2Step() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppDimensions.paddingXL),
+      padding: const EdgeInsets.all(AppDimensions.paddingXL),
       child: Column(
         children: [
           GlassCard(
-            padding: EdgeInsets.all(AppDimensions.paddingLarge),
+            padding: const EdgeInsets.all(AppDimensions.paddingLarge),
             child: Column(
               children: [
                 Container(
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withOpacity(0.1),
+                    color: AppColors.wisteriaBlue.withOpacity(0.1),
                     borderRadius:
                         BorderRadius.circular(AppDimensions.radiusXXL),
                   ),
                   child: Icon(
                     Icons.air_rounded,
                     size: AppDimensions.iconXXL,
-                    color: AppColors.primaryBlue,
+                    color: AppColors.wisteriaBlue,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 Text(
                   'Oxygen Saturation (SpO2)',
                   style: AppTextStyles.heading2.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceM),
+                const SizedBox(height: AppDimensions.spaceM),
                 Text(
                   'Measure your blood oxygen level using a pulse oximeter',
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -607,7 +713,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 _buildNumberInput(
                   key: 'spo2',
                   controller: _spo2Controller,
@@ -617,10 +723,10 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   max: 100,
                   unit: '%',
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 _buildReferenceRanges(
                   title: 'Oxygen Levels:',
-                  items: [
+                  items: const [
                     '95-100%: Normal',
                     '94%: Low',
                     '90-93%: Very Low',
@@ -635,38 +741,38 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     );
   }
 
-  // Step 3: Blood Pressure
+  // Step 3: Blood Pressure - FIXED: Changed to Column layout
   Widget _buildBloodPressureStep() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppDimensions.paddingXL),
+      padding: const EdgeInsets.all(AppDimensions.paddingXL),
       child: Column(
         children: [
           GlassCard(
-            padding: EdgeInsets.all(AppDimensions.paddingLarge),
+            padding: const EdgeInsets.all(AppDimensions.paddingLarge),
             child: Column(
               children: [
                 Container(
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.softPurple.withOpacity(0.1),
+                    color: AppColors.pastelPetal.withOpacity(0.1),
                     borderRadius:
                         BorderRadius.circular(AppDimensions.radiusXXL),
                   ),
                   child: Icon(
                     Icons.monitor_heart_rounded,
                     size: AppDimensions.iconXXL,
-                    color: AppColors.softPurple,
+                    color: AppColors.pastelPetal,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 Text(
                   'Blood Pressure',
                   style: AppTextStyles.heading2.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceM),
+                const SizedBox(height: AppDimensions.spaceM),
                 Text(
                   'Enter your systolic and diastolic blood pressure readings',
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -674,40 +780,43 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
-                Row(
+                const SizedBox(height: AppDimensions.spaceXXXL),
+
+                // FIXED: Changed from Row to Column for BP inputs
+                Column(
                   children: [
-                    Expanded(
-                      child: _buildNumberInput(
-                        key: 'systolicBP',
-                        controller: _systolicBPController,
-                        label: 'Systolic',
-                        icon: Icons.arrow_upward_rounded,
-                        min: 70,
-                        max: 250,
-                        unit: 'mmHg',
-                        centered: false,
-                      ),
+                    // Systolic BP
+                    _buildNumberInput(
+                      key: 'systolicBP',
+                      controller: _systolicBPController,
+                      label: 'Systolic Pressure',
+                      icon: Icons.arrow_upward_rounded,
+                      min: 70,
+                      max: 250,
+                      unit: 'mmHg',
+                      centered: false,
                     ),
-                    SizedBox(width: AppDimensions.spaceL),
-                    Expanded(
-                      child: _buildNumberInput(
-                        key: 'diastolicBP',
-                        controller: _diastolicBPController,
-                        label: 'Diastolic',
-                        icon: Icons.arrow_downward_rounded,
-                        min: 40,
-                        max: 150,
-                        unit: 'mmHg',
-                        centered: false,
-                      ),
+
+                    const SizedBox(height: AppDimensions.spaceXL),
+
+                    // Diastolic BP
+                    _buildNumberInput(
+                      key: 'diastolicBP',
+                      controller: _diastolicBPController,
+                      label: 'Diastolic Pressure',
+                      icon: Icons.arrow_downward_rounded,
+                      min: 40,
+                      max: 150,
+                      unit: 'mmHg',
+                      centered: false,
                     ),
                   ],
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 _buildReferenceRanges(
                   title: 'Blood Pressure Categories:',
-                  items: [
+                  items: const [
                     'Normal: <120/<80 mmHg',
                     'Elevated: 120-129/<80 mmHg',
                     'Stage 1: 130-139/80-89 mmHg',
@@ -726,11 +835,11 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   // Step 4: Temperature
   Widget _buildTemperatureStep() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppDimensions.paddingXL),
+      padding: const EdgeInsets.all(AppDimensions.paddingXL),
       child: Column(
         children: [
           GlassCard(
-            padding: EdgeInsets.all(AppDimensions.paddingLarge),
+            padding: const EdgeInsets.all(AppDimensions.paddingLarge),
             child: Column(
               children: [
                 Container(
@@ -747,14 +856,14 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                     color: AppColors.riskModerate,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 Text(
                   'Body Temperature',
                   style: AppTextStyles.heading2.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: AppDimensions.spaceM),
+                const SizedBox(height: AppDimensions.spaceM),
                 Text(
                   'Measure your body temperature in Celsius',
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -762,7 +871,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 _buildNumberInput(
                   key: 'temperature',
                   controller: _temperatureController,
@@ -773,10 +882,10 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   isDecimal: true,
                   unit: '°C',
                 ),
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
                 _buildReferenceRanges(
                   title: 'Temperature Ranges:',
-                  items: [
+                  items: const [
                     'Normal: 36.1-37.2°C',
                     'Elevated: 37.3-37.9°C',
                     'Fever: 38.0-38.9°C',
@@ -795,29 +904,29 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   // Step 5: Review
   Widget _buildReviewStep() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(AppDimensions.paddingXL),
+      padding: const EdgeInsets.all(AppDimensions.paddingXL),
       child: Column(
         children: [
           GlassCard(
-            padding: EdgeInsets.all(AppDimensions.paddingLarge),
+            padding: const EdgeInsets.all(AppDimensions.paddingLarge),
             child: Column(
               children: [
                 Container(
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.softGreen.withOpacity(0.1),
+                    color: AppColors.frozenWater.withOpacity(0.1),
                     borderRadius:
                         BorderRadius.circular(AppDimensions.radiusXXL),
                   ),
                   child: Icon(
                     Icons.checklist_rounded,
                     size: AppDimensions.iconXXL,
-                    color: AppColors.softGreen,
+                    color: AppColors.frozenWater,
                   ),
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 Text(
                   'Review Your Vitals',
@@ -826,7 +935,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   ),
                 ),
 
-                SizedBox(height: AppDimensions.spaceM),
+                const SizedBox(height: AppDimensions.spaceM),
 
                 Text(
                   'Confirm all information is correct before submitting',
@@ -836,45 +945,56 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                   textAlign: TextAlign.center,
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 // Vitals Summary
                 _buildVitalSummaryItem(
                   icon: Icons.favorite_rounded,
                   label: 'Heart Rate',
-                  value: '${_heartRateController.text} bpm',
-                  isValid: _fieldValid['heartRate'] ?? true,
+                  value: _heartRateController.text.isNotEmpty
+                      ? '${_heartRateController.text} bpm'
+                      : 'Not entered',
+                  isValid: _fieldValid['heartRate']!,
                 ),
 
                 _buildVitalSummaryItem(
                   icon: Icons.air_rounded,
                   label: 'SpO2 Level',
-                  value: '${_spo2Controller.text}%',
-                  isValid: _fieldValid['spo2'] ?? true,
+                  value: _spo2Controller.text.isNotEmpty
+                      ? '${_spo2Controller.text}%'
+                      : 'Not entered',
+                  isValid: _fieldValid['spo2']!,
                 ),
 
                 _buildVitalSummaryItem(
                   icon: Icons.monitor_heart_rounded,
                   label: 'Blood Pressure',
-                  value:
-                      '${_systolicBPController.text}/${_diastolicBPController.text} mmHg',
-                  isValid: (_fieldValid['systolicBP'] ?? true) && 
-                          (_fieldValid['diastolicBP'] ?? true),
+                  value: _systolicBPController.text.isNotEmpty &&
+                          _diastolicBPController.text.isNotEmpty
+                      ? '${_systolicBPController.text}/${_diastolicBPController.text} mmHg'
+                      : 'Not entered',
+                  isValid:
+                      _fieldValid['systolicBP']! && _fieldValid['diastolicBP']!,
                 ),
 
                 _buildVitalSummaryItem(
                   icon: Icons.thermostat_rounded,
                   label: 'Temperature',
-                  value: '${_temperatureController.text}°C',
-                  isValid: _fieldValid['temperature'] ?? true,
+                  value: _temperatureController.text.isNotEmpty
+                      ? '${_temperatureController.text}°C'
+                      : 'Not entered',
+                  isValid: _fieldValid['temperature']!,
                 ),
 
-                SizedBox(height: AppDimensions.spaceXXXL),
+                const SizedBox(height: AppDimensions.spaceXXXL),
 
                 // Notes Section
                 TextFormField(
                   controller: _notesController,
                   maxLines: 3,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Additional Notes (Optional)',
                     labelStyle: AppTextStyles.bodyMedium.copyWith(
@@ -883,12 +1003,18 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                     border: OutlineInputBorder(
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusMedium),
-                      borderSide: BorderSide(color: AppColors.lightBlue),
+                      borderSide: const BorderSide(color: AppColors.lightBlue),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusMedium),
-                      borderSide: BorderSide(color: AppColors.primaryBlue),
+                      borderSide:
+                          const BorderSide(color: AppColors.wisteriaBlue),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      borderSide: const BorderSide(color: AppColors.lightBlue),
                     ),
                   ),
                 ),
@@ -913,7 +1039,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
   }) {
     String? errorText;
     bool isValid = _fieldValid[key] ?? true;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -924,65 +1050,94 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             fontWeight: FontWeight.w600,
           ),
         ),
-        SizedBox(height: AppDimensions.spaceS),
+        const SizedBox(height: AppDimensions.spaceS),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
             boxShadow: AppShadows.elevation1,
-            border: !isValid 
-              ? Border.all(color: AppColors.riskHigh, width: 2)
-              : null,
+            border: !isValid
+                ? Border.all(color: AppColors.riskHigh, width: 2)
+                : null,
           ),
           child: TextFormField(
             controller: controller,
             keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
             style: AppTextStyles.heading3.copyWith(
-              color: isValid ? AppColors.textPrimary : AppColors.riskHigh,
+              color: AppColors.textPrimary,
             ),
             textAlign: centered ? TextAlign.center : TextAlign.left,
             onChanged: (value) {
               if (value.isNotEmpty) {
-                final numValue = isDecimal ? double.tryParse(value) : int.tryParse(value);
+                final numValue =
+                    isDecimal ? double.tryParse(value) : int.tryParse(value);
                 if (numValue != null) {
                   final newIsValid = numValue >= min && numValue <= max;
                   setState(() {
                     _fieldValid[key] = newIsValid;
                   });
-                  
+
                   if (!newIsValid) {
                     errorText = 'Must be between $min and $max $unit';
                   } else {
                     errorText = null;
                   }
                 }
+              } else {
+                setState(() {
+                  _fieldValid[key] = true;
+                  errorText = null;
+                });
               }
             },
             decoration: InputDecoration(
-              prefixIcon: Icon(icon, 
-                  color: isValid ? AppColors.primaryBlue : AppColors.riskHigh),
+              prefixIcon: Icon(
+                icon,
+                // ✅ FIXED: Single consistent color for ALL input fields
+                color: isValid ? AppColors.wisteriaBlue : AppColors.riskHigh,
+              ),
               suffixText: unit,
               suffixStyle: AppTextStyles.bodyMedium.copyWith(
-                color: isValid ? AppColors.textSecondary : AppColors.riskHigh,
+                color: AppColors.textSecondary,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
                 borderSide: BorderSide.none,
               ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+                borderSide: const BorderSide(
+                  // ✅ FIXED: Single consistent focus color
+                  color: AppColors.wisteriaBlue,
+                  width: 2,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+                borderSide: BorderSide.none,
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+                borderSide: const BorderSide(
+                  color: AppColors.riskHigh,
+                  width: 2,
+                ),
+              ),
               filled: true,
               fillColor: Colors.white,
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: AppDimensions.spaceL,
                 vertical: AppDimensions.spaceXL,
               ),
               errorText: errorText,
-              errorStyle: AppTextStyles.caption.copyWith(color: AppColors.riskHigh),
+              errorStyle:
+                  AppTextStyles.caption.copyWith(color: AppColors.riskHigh),
             ),
           ),
         ),
-        SizedBox(height: AppDimensions.spaceS),
+        const SizedBox(height: AppDimensions.spaceS),
         Text(
-          'Range: $min-$max $unit',
+          'Range: ${min.toString().replaceAll('.0', '')}-${max.toString().replaceAll('.0', '')} $unit',
           style: AppTextStyles.caption.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -996,7 +1151,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     required List<String> items,
   }) {
     return GlassCard(
-      padding: EdgeInsets.all(AppDimensions.paddingMedium),
+      padding: const EdgeInsets.all(AppDimensions.paddingMedium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1007,12 +1162,12 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
               fontWeight: FontWeight.w600,
             ),
           ),
-          SizedBox(height: AppDimensions.spaceM),
+          const SizedBox(height: AppDimensions.spaceM),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: items.map((item) {
               return Padding(
-                padding: EdgeInsets.only(bottom: AppDimensions.spaceXS),
+                padding: const EdgeInsets.only(bottom: AppDimensions.spaceXS),
                 child: Row(
                   children: [
                     Icon(
@@ -1020,7 +1175,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
                       size: 6,
                       color: AppColors.textSecondary,
                     ),
-                    SizedBox(width: AppDimensions.spaceS),
+                    const SizedBox(width: AppDimensions.spaceS),
                     Expanded(
                       child: Text(
                         item,
@@ -1046,33 +1201,32 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
     required bool isValid,
   }) {
     return Container(
-      margin: EdgeInsets.only(bottom: AppDimensions.spaceL),
-      padding: EdgeInsets.all(AppDimensions.paddingMedium),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spaceL),
+      padding: const EdgeInsets.all(AppDimensions.paddingMedium),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
         boxShadow: AppShadows.elevation1,
-        border: !isValid 
-          ? Border.all(color: AppColors.riskHigh, width: 2)
-          : null,
+        border:
+            !isValid ? Border.all(color: AppColors.riskHigh, width: 2) : null,
       ),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(AppDimensions.spaceM),
+            padding: const EdgeInsets.all(AppDimensions.spaceM),
             decoration: BoxDecoration(
-              color: isValid 
-                ? AppColors.primaryBlue.withOpacity(0.1)
-                : AppColors.riskHigh.withOpacity(0.1),
+              color: isValid
+                  ? AppColors.wisteriaBlue.withOpacity(0.1)
+                  : AppColors.riskHigh.withOpacity(0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
             ),
             child: Icon(
               icon,
-              color: isValid ? AppColors.primaryBlue : AppColors.riskHigh,
+              color: isValid ? AppColors.wisteriaBlue : AppColors.riskHigh,
               size: AppDimensions.iconM,
             ),
           ),
-          SizedBox(width: AppDimensions.spaceL),
+          const SizedBox(width: AppDimensions.spaceL),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1093,53 +1247,53 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
               ],
             ),
           ),
-          if (!isValid)
-            Icon(Icons.warning, color: AppColors.riskHigh),
+          if (!isValid) const Icon(Icons.warning, color: AppColors.riskHigh),
         ],
       ),
     );
   }
 
   Widget _buildNavigationButtons() {
-  final bool allValid = _fieldValid.values.every((valid) => valid);
-  final bool isReviewStep = _currentStep == _steps.length - 1;
-  
-  return Padding(
-    padding: EdgeInsets.all(AppDimensions.paddingMedium),
-    child: Row(
-      children: [
-        if (_currentStep > 0)
+    final bool allValid = _fieldValid.values.every((valid) => valid);
+    final bool isReviewStep = _currentStep == _steps.length - 1;
+
+    return Padding(
+      padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+      child: Row(
+        children: [
+          if (_currentStep > 0)
+            Expanded(
+              child: GlassButton(
+                text: 'Back',
+                type: ButtonType.secondary,
+                onPressed: _previousStep,
+              ),
+            ),
+          if (_currentStep > 0) const SizedBox(width: AppDimensions.spaceL),
           Expanded(
             child: GlassButton(
-              text: 'Back',
-              type: ButtonType.secondary,
-              onPressed: _previousStep,
+              text: isReviewStep
+                  ? (_isSubmitting ? 'Analyzing...' : 'Submit & Analyze')
+                  : 'Next',
+              type: ButtonType.primary,
+              onPressed: () {
+                if (isReviewStep) {
+                  if (_isSubmitting) return;
+                  if (!allValid) {
+                    _showSnackBar(
+                        'Please fix invalid values', AppColors.riskHigh);
+                    return;
+                  }
+                  _submitVitals();
+                } else {
+                  _nextStep();
+                }
+              },
+              isLoading: _isSubmitting,
             ),
           ),
-        if (_currentStep > 0) SizedBox(width: AppDimensions.spaceL),
-        Expanded(
-          child: GlassButton(
-            text: isReviewStep
-                ? (_isSubmitting ? 'Analyzing...' : 'Submit & Analyze')
-                : 'Next',
-            type: ButtonType.primary,
-            onPressed: () {
-              if (isReviewStep) {
-                if (_isSubmitting) return;
-                if (!allValid) {
-                  _showSnackBar('Please fix invalid values', AppColors.riskHigh);
-                  return;
-                }
-                _submitVitals();
-              } else {
-                _nextStep();
-              }
-            },
-            isLoading: _isSubmitting,
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }

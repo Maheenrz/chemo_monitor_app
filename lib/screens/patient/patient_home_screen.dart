@@ -1,4 +1,3 @@
-// lib/screens/patient/patient_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chemo_monitor_app/config/app_constants.dart';
@@ -13,29 +12,6 @@ import 'package:chemo_monitor_app/screens/shared/message_screen.dart';
 import 'package:chemo_monitor_app/screens/shared/settings_screen.dart';
 import 'package:intl/intl.dart';
 
-// Soft Pastel Color Palette for Chemo Care
-class ChemoColors {
-  static const Color wisteriaBlue =
-      Color(0xFF809bce); // Primary soft blue-violet
-  static const Color powderBlue = Color(0xFF95b8d1); // Comforting blue
-  static const Color frozenWater = Color(0xFFb8e0d2); // Turquoise shimmer
-  static const Color honeydew = Color(0xFFd6eadf); // Pale green
-  static const Color pastelPetal = Color(0xFFeac4d5); // Blush pink
-
-  // Background shades
-  static const Color lightBackground = Color(0xFFF5F7FA);
-  static const Color cardBackground = Colors.white;
-
-  // Text colors
-  static const Color textPrimary = Color(0xFF2D3E50);
-  static const Color textSecondary = Color(0xFF8E9AAF);
-
-  // Risk levels (softer versions)
-  static const Color riskLow = Color(0xFFb8e0d2); // Frozen Water
-  static const Color riskModerate = Color(0xFFeac4d5); // Pastel Petal
-  static const Color riskHigh = Color(0xFFf4b4c4); // Slightly deeper petal
-}
-
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
 
@@ -49,6 +25,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
   UserModel? _userProfile;
   HealthDataModel? _latestHealthData;
+  String? _doctorName;
+  String? _doctorId;
   bool _isLoading = true;
 
   @override
@@ -64,6 +42,23 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     try {
       final profile = await _authService.getUserProfile(user.uid);
       final latestData = await _healthDataService.getLatestHealthData(user.uid);
+
+      // Load doctor info if assigned - FIXED: Added null check
+      if (profile!.assignedDoctorId != null && profile.assignedDoctorId!.isNotEmpty) {
+        try {
+          final doctorProfile = await _authService.getUserProfile(
+            profile.assignedDoctorId!,
+          );
+          if (doctorProfile != null) {
+            setState(() {
+              _doctorName = doctorProfile.name;
+              _doctorId = doctorProfile.uid;
+            });
+          }
+        } catch (e) {
+          print('Error loading doctor profile: $e');
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -95,16 +90,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   Color _getRiskColor() {
-    if (_latestHealthData == null) return ChemoColors.frozenWater;
+    if (_latestHealthData == null) return AppColors.frozenWater;
     switch (_latestHealthData!.riskLevel) {
       case 0:
-        return ChemoColors.riskLow;
+        return AppColors.riskLow;
       case 1:
-        return ChemoColors.riskModerate;
+        return AppColors.riskModerate;
       case 2:
-        return ChemoColors.riskHigh;
+        return AppColors.riskHigh;
       default:
-        return ChemoColors.textSecondary;
+        return AppColors.textSecondary;
     }
   }
 
@@ -120,25 +115,17 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   void _navigateToChatWithDoctor() async {
-    if (_userProfile?.assignedDoctorId != null) {
-      final doctorProfile = await _authService.getUserProfile(
-        _userProfile!.assignedDoctorId!,
-      );
-
-      if (doctorProfile != null && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MessageScreen(
-              otherUserId: doctorProfile.uid,
-              otherUserName: doctorProfile.name,
-              otherUserRole: 'doctor',
-            ),
+    if (_doctorId != null && _doctorName != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MessageScreen(
+            otherUserId: _doctorId!,
+            otherUserName: _doctorName!,
+            otherUserRole: 'doctor',
           ),
-        );
-      } else {
-        _showSnackBar('Doctor profile not found');
-      }
+        ),
+      );
     } else {
       _showSnackBar('No assigned doctor found');
     }
@@ -148,7 +135,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: ChemoColors.wisteriaBlue,
+        backgroundColor: AppColors.wisteriaBlue,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(
@@ -161,16 +148,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ChemoColors.lightBackground,
+      backgroundColor: AppColors.lightBackground,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadData,
-          color: ChemoColors.wisteriaBlue,
+          color: AppColors.wisteriaBlue,
           child: _isLoading
               ? Center(
                   child: CircularProgressIndicator(
                     valueColor:
-                        AlwaysStoppedAnimation<Color>(ChemoColors.wisteriaBlue),
+                        AlwaysStoppedAnimation<Color>(AppColors.wisteriaBlue),
                   ),
                 )
               : CustomScrollView(
@@ -202,7 +189,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                       ),
 
                     // Doctor Contact Card
-                    if (_userProfile?.assignedDoctorId != null)
+                    if (_doctorName != null || (_userProfile?.assignedDoctorId != null && _userProfile!.assignedDoctorId!.isNotEmpty))
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -219,7 +206,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: ChemoColors.textPrimary,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ),
@@ -247,7 +234,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           height: 48,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [ChemoColors.wisteriaBlue, ChemoColors.powderBlue],
+              colors: [AppColors.wisteriaBlue, AppColors.powderBlue],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -280,7 +267,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: ChemoColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -289,7 +276,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                 DateFormat('EEEE, MMM dd').format(DateTime.now()),
                 style: const TextStyle(
                   fontSize: 12,
-                  color: ChemoColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -301,13 +288,13 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: ChemoColors.honeydew,
+            color: AppColors.honeydew,
             borderRadius: BorderRadius.circular(12),
           ),
           child: IconButton(
             icon: const Icon(
               Icons.settings_rounded,
-              color: ChemoColors.wisteriaBlue,
+              color: AppColors.wisteriaBlue,
               size: 20,
             ),
             onPressed: () {
@@ -367,14 +354,13 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
           const SizedBox(height: 16),
 
-          // Main Content Row - FIXED LAYOUT
+          // Main Content Row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left Side - Image (Fixed width instead of Expanded)
+              // Left Side - Image
               Container(
-                width: MediaQuery.of(context).size.width *
-                    0.35, // 35% of screen width
+                width: MediaQuery.of(context).size.width * 0.35,
                 height: 140,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
@@ -390,7 +376,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   borderRadius: BorderRadius.circular(16),
                   child: Image.asset(
                     'assets/images/chemo_care.png',
-                    fit: BoxFit.cover, // Changed to cover to show full image
+                    fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
                         decoration: BoxDecoration(
@@ -412,7 +398,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
               const SizedBox(width: 16),
 
-              // Right Side - Text Content (Takes remaining space)
+              // Right Side - Text Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,9 +408,9 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                     Text(
                       'Your Care\nJourney',
                       style: TextStyle(
-                        fontSize: 22, // Slightly smaller
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: ChemoColors.textPrimary,
+                        color: AppColors.textPrimary,
                         height: 1.2,
                       ),
                     ),
@@ -438,17 +424,17 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           : 'Track your vitals daily',
                       style: const TextStyle(
                         fontSize: 13,
-                        color: ChemoColors.textSecondary,
+                        color: AppColors.textSecondary,
                       ),
                     ),
 
                     const SizedBox(height: 12),
 
-                    // Motivational Message - SOLID COLOR SECTION
+                    // Motivational Message
                     Container(
-                      padding: const EdgeInsets.all(12), // Increased padding
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: riskColor.withOpacity(0.8), // More solid color
+                        color: riskColor.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
@@ -464,16 +450,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           Icon(
                             Icons.favorite_rounded,
                             size: 16,
-                            color: Colors.white, // White icon for contrast
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
                               'Stay strong on your journey',
                               style: TextStyle(
-                                fontSize: 13, // Slightly larger
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white, // White text for contrast
+                                color: Colors.white,
                               ),
                             ),
                           ),
@@ -518,7 +504,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   children: [
                     Icon(
                       Icons.favorite_rounded,
-                      color: ChemoColors.pastelPetal,
+                      color: AppColors.pastelPetal,
                       size: 20,
                     ),
                     const Spacer(),
@@ -529,7 +515,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   'Heart Rate',
                   style: TextStyle(
                     fontSize: 12,
-                    color: ChemoColors.textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -546,14 +532,14 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: ChemoColors.textPrimary,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const Text(
                           ' bpm',
                           style: TextStyle(
                             fontSize: 12,
-                            color: ChemoColors.textSecondary,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -590,7 +576,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   children: [
                     Icon(
                       Icons.air_rounded,
-                      color: ChemoColors.frozenWater,
+                      color: AppColors.frozenWater,
                       size: 20,
                     ),
                     const Spacer(),
@@ -601,7 +587,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   'Oxygen',
                   style: TextStyle(
                     fontSize: 12,
-                    color: ChemoColors.textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -618,14 +604,14 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: ChemoColors.textPrimary,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const Text(
                           ' %',
                           style: TextStyle(
                             fontSize: 12,
-                            color: ChemoColors.textSecondary,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -644,7 +630,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white, // Changed to white background
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -662,7 +648,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
             height: 48,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [ChemoColors.wisteriaBlue, ChemoColors.powderBlue],
+                colors: [AppColors.wisteriaBlue, AppColors.powderBlue],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -687,101 +673,110 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   'Your Doctor',
                   style: TextStyle(
                     fontSize: 12,
-                    color: ChemoColors.textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  'Dr. ${_userProfile?.assignedDoctorId?.substring(0, 8) ?? 'Assigned'}',
+                  _doctorName != null 
+                    ? 'Dr. $_doctorName' 
+                    : 'Doctor Not Assigned',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: ChemoColors.textPrimary,
+                    color: AppColors.textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
+                if (_doctorName != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Available for consultations',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
 
-          // Message Button - Redesigned like image
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: ChemoColors.wisteriaBlue, // Solid color background
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: ChemoColors.wisteriaBlue.withOpacity(0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.message_rounded,
-                color: Colors.white, // White icon
-                size: 20,
+          // Message Button - Only show if doctor is assigned
+          if (_doctorName != null)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.wisteriaBlue,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.wisteriaBlue.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              onPressed: _navigateToChatWithDoctor,
-              padding: EdgeInsets.zero,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.message_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                onPressed: _navigateToChatWithDoctor,
+                padding: EdgeInsets.zero,
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildQuickActions() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Row(
-          children: [
-            Expanded(
-              child: _buildActionButton(
-                icon: Icons.add_circle_rounded,
-                label: 'Enter Vitals',
-                color: ChemoColors.wisteriaBlue,
-                onTap: _navigateToVitalsEntry,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionButton(
-                icon: Icons.history_rounded,
-                label: 'History',
-                color: ChemoColors.powderBlue,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HealthHistoryScreen(),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionButton(
-                icon: Icons.smart_toy_rounded,
-                label: 'AI Help',
-                color: ChemoColors.frozenWater,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ChatbotScreen(),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        Expanded(
+          child: _buildActionButton(
+            icon: Icons.add_circle_rounded,
+            label: 'Enter Vitals',
+            color: AppColors.wisteriaBlue,
+            onTap: _navigateToVitalsEntry,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildActionButton(
+            icon: Icons.history_rounded,
+            label: 'History',
+            color: AppColors.powderBlue,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HealthHistoryScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildActionButton(
+            icon: Icons.smart_toy_rounded,
+            label: 'AI Help',
+            color: AppColors.frozenWater,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChatbotScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -827,7 +822,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: ChemoColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
