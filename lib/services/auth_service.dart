@@ -122,7 +122,6 @@ class AuthService {
   }
 
   // Helper: Validate Doctor Code (Required for registerPatient)
-  // Helper: Validate Doctor Code (Required for registerPatient)
 Future<String?> validateDoctorCode(String code) async {
   try {
     QuerySnapshot query = await _firestore

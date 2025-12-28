@@ -51,8 +51,7 @@ class NotificationModel {
   }
 }
 
-/// ✅ SIMPLE Notification Service - Uses only Firestore
-/// Updated with Glassmorphism UI and AppColors integration
+/// SIMPLE Notification Service - Uses only Firestore
 class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -61,7 +60,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  /// 🚨 Send HIGH RISK alert to doctor
+  /// send HIGH RISK alert to doctor
   Future<void> sendHighRiskAlert({
     required String doctorId,
     required String patientId,
@@ -76,7 +75,7 @@ class NotificationService {
         'patientName': patientName,
         'riskLevel': healthData.riskLevel,
         'timestamp': Timestamp
-            .now(), // ✅ FIXED: Use Timestamp.now() instead of serverTimestamp()
+            .now(), // FIXED: Use Timestamp.now() instead of serverTimestamp()
         'read': false,
         'priority': 'urgent',
         'message':
@@ -97,7 +96,7 @@ class NotificationService {
     }
   }
 
-  /// ⚠️ Send MODERATE RISK notification to doctor
+  /// Send MODERATE RISK notification to doctor
   Future<void> sendModerateRiskNotification({
     required String doctorId,
     required String patientId,
@@ -133,7 +132,7 @@ class NotificationService {
     }
   }
 
-  /// 📊 Get UNREAD notification count (for badge)
+  /// Get UNREAD notification count (for badge)
   Stream<int> getUnreadCount(String doctorId) {
     return _firestore
         .collection('notifications')
@@ -143,7 +142,7 @@ class NotificationService {
         .map((snapshot) => snapshot.docs.length);
   }
 
-  /// 📋 Get ALL notifications for doctor (with real-time updates)
+  /// Get ALL notifications for doctor (with real-time updates)
   Stream<List<Map<String, dynamic>>> getNotifications(String doctorId) {
     return _firestore
         .collection('notifications')
@@ -161,7 +160,7 @@ class NotificationService {
     });
   }
 
-  /// 🚨 Get URGENT notifications only
+  /// Get URGENT notifications only
   Stream<List<Map<String, dynamic>>> getUrgentNotifications(String doctorId) {
     return _firestore
         .collection('notifications')
@@ -180,7 +179,7 @@ class NotificationService {
     });
   }
 
-  /// ✅ Mark notification as READ
+  /// Mark notification as READ
   Future<void> markAsRead(String notificationId) async {
     try {
       await _firestore
@@ -193,7 +192,7 @@ class NotificationService {
     }
   }
 
-  /// ✅ Mark ALL notifications as READ
+  ///  Mark ALL notifications as READ
   Future<void> markAllAsRead(String doctorId) async {
     try {
       final snapshot = await _firestore
@@ -214,7 +213,7 @@ class NotificationService {
     }
   }
 
-  /// 🗑️ Delete a notification
+  /// Delete a notification
   Future<void> deleteNotification(String notificationId) async {
     try {
       await _firestore.collection('notifications').doc(notificationId).delete();
@@ -224,7 +223,7 @@ class NotificationService {
     }
   }
 
-  /// 🧹 Clear ALL READ notifications
+  /// Clear ALL READ notifications
   Future<void> clearReadNotifications(String doctorId) async {
     try {
       final snapshot = await _firestore
@@ -245,7 +244,7 @@ class NotificationService {
     }
   }
 
-  /// 🔔 Show in-app alert dialog (Glassmorphism style)
+  /// Show in-app alert dialog (Glassmorphism style)
   static void showAlertDialog(
       BuildContext context, Map<String, dynamic> notification) {
     showDialog(
@@ -421,7 +420,7 @@ class NotificationService {
   }
 
   static Color _getRiskColor(int? riskLevel) {
-    // ✅ Changed int to int?
+    // Changed int to int?
     switch (riskLevel) {
       case 0:
         return AppColors.riskLow;
@@ -435,7 +434,7 @@ class NotificationService {
   }
 
   static String _getRiskColorHex(int? riskLevel) {
-    // ✅ Changed int to int?
+    //  Changed int to int?
     switch (riskLevel) {
       case 0:
         return '#6FD195';

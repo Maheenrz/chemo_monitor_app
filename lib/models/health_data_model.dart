@@ -118,7 +118,6 @@ class HealthDataModel {
     ];
   }
 
-  // Add these methods to your existing HealthDataModel class:
 
 /// Get specific concerns based on vitals
 List<String> getSpecificConcerns() {

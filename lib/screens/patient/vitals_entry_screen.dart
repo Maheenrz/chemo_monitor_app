@@ -1093,7 +1093,7 @@ class _VitalsEntryScreenState extends State<VitalsEntryScreen>
             decoration: InputDecoration(
               prefixIcon: Icon(
                 icon,
-                // ✅ FIXED: Single consistent color for ALL input fields
+                // FIXED: Single consistent color for ALL input fields
                 color: isValid ? AppColors.wisteriaBlue : AppColors.riskHigh,
               ),
               suffixText: unit,

@@ -320,7 +320,7 @@ class VitalsResultScreen extends StatelessWidget {
             
             const SizedBox(height: AppDimensions.spaceXXXL),
             
-            // ✅ FIXED: Single button only (Share button removed)
+            
             SizedBox(
               width: double.infinity,
               child: GlassButton(

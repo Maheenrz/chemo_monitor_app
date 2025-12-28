@@ -9,11 +9,11 @@ class AppInfo {
 }
 
 // ===================================================
-// IMPROVED HEALTH-APP COLOR PALETTE (Same variable names!)
+// IMPROVED HEALTH-APP COLOR PALETTE
 // ===================================================
 
 class AppColors {
-  // KEEP SAME VARIABLE NAMES - IMPROVED COLORS
+  
   
   // Primary Colors - Clean Medical Palette
   static const Color wisteriaBlue = Color(0xFF2C82C9);      // Professional medical blue
@@ -196,7 +196,7 @@ class AppTextStyles {
 }
 
 // ===================================================
-// DIMENSIONS & SPACING SYSTEM (SAME)
+// DIMENSIONS & SPACING SYSTEM 
 // ===================================================
 
 class AppDimensions {
@@ -318,7 +318,6 @@ class AppShadows {
 // ===================================================
 
 class AppGradients {
-  // Removed gradients - using solid colors instead
   // Keeping class for backward compatibility but using single colors
   
   static Gradient primary = LinearGradient(
@@ -353,7 +352,7 @@ class AppGradients {
 }
 
 // ===================================================
-// ANIMATION DURATIONS (SAME)
+// ANIMATION DURATIONS 
 // ===================================================
 
 class AppAnimations {
@@ -368,7 +367,7 @@ class AppAnimations {
 }
 
 // ===================================================
-// ENUMS (SAME)
+// ENUMS 
 // ===================================================
 
 enum UserRole {
