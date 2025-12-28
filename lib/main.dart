@@ -57,17 +57,12 @@ void main() async {
     print('⚠️ ML model initialization failed: $e');
   }
 
-  // 4. Initialize Chats
-  try {
-    final chatInitializer = ChatInitializer();
-    await chatInitializer.initializeUserChats();
-    print('✅ Chats initialized successfully');
-  } catch (e) {
-    print('⚠️ Error initializing chats: $e');
-  }
+  // 4. Chat initialization moved to after login - no longer blocks app startup
+  print('⏭️ Chat initialization will run after user login');
   
   runApp(const ChemoMonitorApp());
 }
+
 class ChemoMonitorApp extends StatelessWidget {
   const ChemoMonitorApp({super.key});
 
@@ -193,6 +188,9 @@ class AuthWrapper extends StatelessWidget {
             final userData = userDoc.data() as Map<String, dynamic>;
             final role = userData['role']?.toString() ?? 'patient';
 
+            // Initialize chats in background after successful login (non-blocking)
+            _initializeChatsInBackground(user.uid);
+
             return role == 'doctor' 
                 ? const DoctorHomeScreen()
                 : const PatientHomeScreen();
@@ -200,6 +198,21 @@ class AuthWrapper extends StatelessWidget {
         );
       },
     );
+  }
+
+  // Initialize chats in background without blocking UI
+  void _initializeChatsInBackground(String userId) {
+    Future.delayed(Duration.zero, () async {
+      try {
+        print('🔄 Initializing chats in background for user: $userId');
+        final chatInitializer = ChatInitializer();
+        await chatInitializer.initializeUserChats();
+        print('✅ Chats initialized successfully in background');
+      } catch (e) {
+        print('⚠️ Background chat initialization failed: $e');
+        // Don't block the app if chat initialization fails
+      }
+    });
   }
 
   Future<void> _createUserDocument(String uid, String email) async {

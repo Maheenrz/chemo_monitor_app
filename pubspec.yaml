@@ -30,11 +30,8 @@ dependencies:
   # File Handling
   image_picker: ^1.0.7
   cloudinary_public: ^0.21.0
-  file_picker: ^8.0.7        # For picking documents/PDFs
-  open_filex: ^4.5.0            # For opening files in device apps
-  permission_handler: ^11.3.1   # For storage permissions
-  dio: ^5.7.0                   # For downloading files with progress
-  path_provider: ^2.1.5 
+    
+  
   # HTTP & APIs
   http: ^1.2.0
     
@@ -82,13 +79,9 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
-
-
-
-
-
+  
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/app_logo.png"
-  min_sdk_android: 21        
+  min_sdk_android: 21

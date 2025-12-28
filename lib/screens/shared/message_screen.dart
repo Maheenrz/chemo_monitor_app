@@ -2,20 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:chemo_monitor_app/config/app_constants.dart';
 import 'package:chemo_monitor_app/services/messaging_service.dart';
 import 'package:chemo_monitor_app/services/auth_service.dart';
-import 'package:chemo_monitor_app/services/file_download_service.dart';
 import 'package:chemo_monitor_app/models/message_model.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:photo_view/photo_view.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'dart:typed_data';
-import 'package:path_provider/path_provider.dart';
 
 class MessageScreen extends StatefulWidget {
   final String otherUserId;
@@ -36,7 +29,6 @@ class MessageScreen extends StatefulWidget {
 class _MessageScreenState extends State<MessageScreen> with TickerProviderStateMixin {
   final MessagingService _messagingService = MessagingService();
   final AuthService _authService = AuthService();
-  final FileDownloadService _fileDownloadService = FileDownloadService();
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -47,8 +39,6 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
   bool _isLoading = false;
   bool _isUploadingFile = false;
   late AnimationController _sendButtonController;
-  Map<String, bool> _downloadingFiles = {}; // Track downloading files
-  Map<String, double> _downloadProgress = {}; // Track download progress
 
   @override
   void initState() {
@@ -89,7 +79,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
     }
   }
 
-  Future<void> _pickAndSendFile() async {
+  Future<void> _pickAndSendImage() async {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -117,7 +107,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
                 child: Row(
                   children: [
                     const Text(
-                      'Send File',
+                      'Send Image',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -150,18 +140,6 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
                 onTap: () {
                   Navigator.pop(context);
                   _pickImage(ImageSource.camera);
-                },
-              ),
-              
-              // 🆕 DOCUMENTS (PDF, DOCX, etc.)
-              _buildFileOption(
-                icon: Icons.insert_drive_file_rounded,
-                title: 'Documents',
-                subtitle: 'PDF, Word, Excel, etc.',
-                color: AppColors.frozenWater,
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickDocument();
                 },
               ),
               
@@ -238,23 +216,6 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
     );
   }
 
-  // 🆕 ADD this new method for document picking:
-  Future<void> _pickDocument() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'],
-      );
-
-      if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
-        await _sendFileMessage(file);
-      }
-    } catch (e) {
-      _showErrorSnackbar('Error picking document: ${e.toString()}');
-    }
-  }
-
   Future<void> _pickImage(ImageSource source) async {
     try {
       final pickedFile = await _picker.pickImage(
@@ -284,7 +245,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
       );
       _scrollToBottom();
     } catch (e) {
-      _showErrorSnackbar('Failed to send file: ${e.toString()}');
+      _showErrorSnackbar('Failed to send image: ${e.toString()}');
     } finally {
       setState(() => _isUploadingFile = false);
     }
@@ -354,272 +315,6 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
     );
   }
 
-  // REPLACE the _downloadFile method:
-  Future<void> _downloadFile(String url, String fileName) async {
-    final fileKey = '$url-$fileName';
-    
-    if (_downloadingFiles[fileKey] == true) {
-      _showErrorSnackbar('Already downloading this file...');
-      return;
-    }
-
-    setState(() {
-      _downloadingFiles[fileKey] = true;
-      _downloadProgress[fileKey] = 0.0;
-    });
-
-    try {
-      // Show downloading snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Downloading $fileName...')),
-            ],
-          ),
-          backgroundColor: AppColors.frozenWater,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 30),
-        ),
-      );
-
-      // Download and open file
-      await _fileDownloadService.downloadAndOpenFile(
-        url,
-        fileName,
-        onProgress: (received, total) {
-          if (mounted) {
-            setState(() {
-              _downloadProgress[fileKey] = received / total;
-            });
-          }
-        },
-      );
-
-      if (mounted) {
-        setState(() {
-          _downloadingFiles[fileKey] = false;
-          _downloadProgress.remove(fileKey);
-        });
-
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        _showSuccessSnackbar('✅ File opened: $fileName');
-      }
-      
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _downloadingFiles[fileKey] = false;
-          _downloadProgress.remove(fileKey);
-        });
-
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-        String errorMessage = 'Failed to download file';
-        
-        if (e.toString().contains('Permission denied')) {
-          errorMessage = 'Storage permission required. Please enable in Settings.';
-        } else if (e.toString().contains('No app')) {
-          errorMessage = 'No app available to open this file type';
-        } else if (e.toString().contains('Network')) {
-          errorMessage = 'Network error. Check your connection.';
-        }
-
-        _showErrorSnackbar(errorMessage);
-        
-        // Show alternative options
-        _showDownloadOptionsDialog(url, fileName);
-      }
-    }
-  }
-
-  void _showDownloadOptionsDialog(String url, String fileName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.download_rounded, color: AppColors.wisteriaBlue),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Download Options',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              fileName,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Choose an option to download:',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            
-            _buildDialogOption(
-              icon: Icons.copy_rounded,
-              title: 'Copy Download Link',
-              subtitle: 'Paste in your browser to download',
-              color: AppColors.wisteriaBlue,
-              onTap: () {
-                Navigator.pop(context);
-                _copyDownloadLink(url);
-              },
-            ),
-            
-            const SizedBox(height: 8),
-            
-            _buildDialogOption(
-              icon: Icons.open_in_browser_rounded,
-              title: 'Open in Browser',
-              subtitle: 'Download directly from browser',
-              color: AppColors.frozenWater,
-              onTap: () {
-                Navigator.pop(context);
-                _openInBrowser(url);
-              },
-            ),
-            
-            const SizedBox(height: 8),
-            
-            _buildDialogOption(
-              icon: Icons.share_rounded,
-              title: 'Share Link',
-              subtitle: 'Share download link',
-              color: AppColors.softGreen,
-              onTap: () {
-                Navigator.pop(context);
-                _shareDownloadLink(url, fileName);
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDialogOption({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios_rounded, size: 16, color: color),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _copyDownloadLink(String url) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: url));
-      _showSuccessSnackbar('Download link copied! Paste in your browser.');
-    } catch (e) {
-      _showErrorSnackbar('Failed to copy link');
-    }
-  }
-
-  Future<void> _openInBrowser(String url) async {
-    try {
-      final uri = Uri.parse(url);
-      final opened = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      
-      if (opened) {
-        _showSuccessSnackbar('Opening in browser...');
-      } else {
-        _showErrorSnackbar('Could not open browser');
-        _copyDownloadLink(url);
-      }
-    } catch (e) {
-      _showErrorSnackbar('Failed to open browser');
-      _copyDownloadLink(url);
-    }
-  }
-
-  Future<void> _shareDownloadLink(String url, String fileName) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: 'Download $fileName: $url'));
-      _showSuccessSnackbar('Download link copied for sharing');
-    } catch (e) {
-      _showErrorSnackbar('Failed to share link');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -637,7 +332,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       elevation: 0,
-      backgroundColor: AppColors.wisteriaBlue, // SOLID COLOR - Changed from gradient
+      backgroundColor: AppColors.wisteriaBlue,
       leading: IconButton(
         icon: Container(
           padding: const EdgeInsets.all(8),
@@ -657,7 +352,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: AppColors.wisteriaBlue, // SOLID COLOR - Changed from gradient
+                color: AppColors.wisteriaBlue,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
@@ -896,7 +591,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
                   ? EdgeInsets.zero
                   : const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isMe ? AppColors.wisteriaBlue : Colors.white, // SOLID COLOR
+                color: isMe ? AppColors.wisteriaBlue : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -915,14 +610,11 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (message.messageType == 'file' && message.fileUrl != null)
-                    _buildFileContent(message, isMe),
+                    _buildImageContent(message),
                   
-                  if (message.message.isNotEmpty && 
-                      !(message.messageType == 'file' && message.fileType == 'image'))
+                  if (message.message.isNotEmpty && message.messageType != 'file')
                     Padding(
-                      padding: message.messageType == 'file' && message.fileType != 'image'
-                          ? EdgeInsets.zero
-                          : const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Text(
                         message.message,
                         style: TextStyle(
@@ -954,7 +646,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
         bottom: 4,
       ),
       decoration: BoxDecoration(
-        color: AppColors.wisteriaBlue, // SOLID COLOR - Changed from gradient
+        color: AppColors.wisteriaBlue,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
@@ -979,219 +671,79 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
     );
   }
 
-  // Update _buildFileContent to show download progress:
-  Widget _buildFileContent(MessageModel message, bool isMe) {
-    final fileKey = '${message.fileUrl}-${message.fileName}';
-    final isDownloading = _downloadingFiles[fileKey] == true;
-    final progress = _downloadProgress[fileKey] ?? 0.0;
-    
-    if (message.fileType == 'image' && message.fileUrl != null) {
-      return GestureDetector(
-        onTap: () => _openImageViewer(message.fileUrl!, message.fileName ?? 'Image'),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            children: [
-              Image.network(
-                message.fileUrl!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    width: 200,
-                    height: 200,
-                    color: AppColors.lightBackground,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.wisteriaBlue),
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 200,
-                    height: 200,
-                    color: AppColors.lightBackground,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.broken_image_rounded, color: AppColors.textSecondary, size: 48),
-                        const SizedBox(height: 8),
-                        Text('Image unavailable', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.5),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+  Widget _buildImageContent(MessageModel message) {
+    return GestureDetector(
+      onTap: () => _openImageViewer(message.fileUrl!, message.fileName ?? 'Image'),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            Image.network(
+              message.fileUrl!,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 200,
+                  height: 200,
+                  color: AppColors.lightBackground,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.wisteriaBlue),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 200,
+                  height: 200,
+                  color: AppColors.lightBackground,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
-                      GestureDetector(
-                        onTap: () => _downloadFile(message.fileUrl!, message.fileName ?? 'image.jpg'),
-                        child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
-                      ),
+                      Icon(Icons.broken_image_rounded, color: AppColors.textSecondary, size: 48),
+                      const SizedBox(height: 8),
+                      Text('Image unavailable', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      // Document/File bubble with progress
-      String fileType = 'file';
-      String fileName = message.fileName ?? 'File';
-      
-      if (fileName.toLowerCase().endsWith('.pdf')) {
-        fileType = 'pdf';
-      } else if (fileName.toLowerCase().endsWith('.doc') || 
-                 fileName.toLowerCase().endsWith('.docx')) {
-        fileType = 'document';
-      } else if (fileName.toLowerCase().endsWith('.xls') || 
-                 fileName.toLowerCase().endsWith('.xlsx')) {
-        fileType = 'spreadsheet';
-      }
-      
-      return GestureDetector(
-        onTap: isDownloading ? null : () => _downloadFile(message.fileUrl!, fileName),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isMe ? Colors.white.withOpacity(0.2) : AppColors.honeydew,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isMe ? Colors.white.withOpacity(0.3) : AppColors.wisteriaBlue,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      _getFileIcon(fileType),
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fileName,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isMe ? Colors.white : AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          fileType.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isMe ? Colors.white70 : AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isDownloading 
-                              ? 'Downloading ${(progress * 100).toInt()}%' 
-                              : 'Tap to download & open',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isMe ? Colors.white60 : AppColors.textSecondary,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isDownloading)
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          isMe ? Colors.white : AppColors.wisteriaBlue,
-                        ),
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.download_rounded,
-                      color: isMe ? Colors.white : AppColors.wisteriaBlue,
-                      size: 20,
-                    ),
-                ],
-              ),
-              
-              // Progress bar
-              if (isDownloading) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 4,
-                    backgroundColor: isMe 
-                        ? Colors.white.withOpacity(0.2)
-                        : AppColors.lightBackground,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      isMe ? Colors.white : AppColors.wisteriaBlue,
-                    ),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.5),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
                 ),
-              ],
-            ],
-          ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                    SizedBox(width: 4),
+                    Text('Tap to view', style: TextStyle(color: Colors.white, fontSize: 11)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      );
-    }
-  }
-
-  IconData _getFileIcon(String fileType) {
-    switch (fileType) {
-      case 'pdf':
-        return Icons.picture_as_pdf_rounded;
-      case 'document':
-        return Icons.description_rounded;
-      case 'spreadsheet':
-        return Icons.table_chart_rounded;
-      default:
-        return Icons.insert_drive_file_rounded;
-    }
+      ),
+    );
   }
 
   Widget _buildMessageFooter(MessageModel message, bool isMe) {
@@ -1254,8 +806,8 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
                 borderRadius: BorderRadius.circular(14),
               ),
               child: IconButton(
-                icon: Icon(Icons.add_circle_rounded, color: AppColors.wisteriaBlue, size: 28),
-                onPressed: _isUploadingFile || _isLoading ? null : _pickAndSendFile,
+                icon: Icon(Icons.image_rounded, color: AppColors.wisteriaBlue, size: 28),
+                onPressed: _isUploadingFile || _isLoading ? null : _pickAndSendImage,
               ),
             ),
             const SizedBox(width: 12),
@@ -1295,7 +847,7 @@ class _MessageScreenState extends State<MessageScreen> with TickerProviderStateM
               ),
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppColors.wisteriaBlue, // SOLID COLOR - Changed from gradient
+                  color: AppColors.wisteriaBlue,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
@@ -1384,23 +936,6 @@ class _ImageViewerScreen extends StatelessWidget {
           style: const TextStyle(color: Colors.white, fontSize: 16),
           overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download_rounded, color: Colors.white),
-            onPressed: () async {
-              try {
-                final uri = Uri.parse(imageUrl);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Failed to download image')),
-                );
-              }
-            },
-          ),
-        ],
       ),
       body: Center(
         child: PhotoView(

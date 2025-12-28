@@ -1,5 +1,7 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
     <!-- Internet permission -->
     <uses-permission android:name="android.permission.INTERNET"/>
     
@@ -8,7 +10,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     
-    <!-- 🆕 ADD THIS - Critical for Android 11+ file access -->
+    <!-- For Android 11+ file access -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
     
@@ -108,7 +110,7 @@
             <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
         </intent>
         
-        <!-- 🆕 ADD THESE - Excel support -->
+        <!-- Excel support -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/vnd.ms-excel" />
@@ -118,7 +120,7 @@
             <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
         </intent>
         
-        <!-- 🆕 ADD THESE - PowerPoint support -->
+        <!-- PowerPoint support -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/vnd.ms-powerpoint" />
@@ -128,13 +130,13 @@
             <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
         </intent>
         
-        <!-- 🆕 ADD THIS - Text files -->
+        <!-- Text files -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="text/plain" />
         </intent>
         
-        <!-- 🆕 ADD THIS - Generic file opener -->
+        <!-- Generic file opener -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="*/*" />
